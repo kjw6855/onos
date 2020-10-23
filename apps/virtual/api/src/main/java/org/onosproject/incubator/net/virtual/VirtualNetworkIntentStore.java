@@ -118,6 +118,8 @@ public interface VirtualNetworkIntentStore
      */
     void addPending(NetworkId networkId, IntentData intent);
 
+    void continueIntent(NetworkId networkId, Key key);
+
     /**
      * Checks to see whether the calling instance is the master for processing
      * this intent, or more specifically, the key contained in this intent.

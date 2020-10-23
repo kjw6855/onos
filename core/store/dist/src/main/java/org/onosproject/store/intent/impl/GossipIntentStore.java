@@ -425,6 +425,11 @@ public class GossipIntentStore
     }
 
     @Override
+    public void continueIntent(Key key) {
+        /* TODO */
+    }
+
+    @Override
     public boolean isMaster(Key intentKey) {
         return partitionService.isMine(intentKey, Key::hash);
     }

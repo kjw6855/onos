@@ -186,6 +186,11 @@ public class SimpleVirtualIntentStore
     }
 
     @Override
+    public void continueIntent(NetworkId networkId, Key key) {
+        // TODO
+    }
+
+    @Override
     public boolean isMaster(NetworkId networkId, Key intentKey) {
         return true;
     }

@@ -212,6 +212,13 @@ public class VirtualNetworkIntentManager
     }
 
     @Override
+    public void continueIntent(Intent intent) {
+        checkNotNull(intent, INTENT_NULL);
+
+        intentStore.continueIntent(networkId, intent.key());
+    }
+
+    @Override
     public Intent getIntent(Key key) {
         checkNotNull(key, KEY_NULL);
         return intentStore.getIntent(networkId, key);

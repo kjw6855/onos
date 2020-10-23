@@ -174,6 +174,11 @@ public class FakeIntentManager implements TestableIntentService {
     }
 
     @Override
+    public void continueIntent(Intent intent) {
+        /* TODO */
+    }
+
+    @Override
     public Set<Intent> getIntents() {
         return Collections.unmodifiableSet(new HashSet<>(intents.values()));
     }

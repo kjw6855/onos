@@ -106,6 +106,8 @@ public interface IntentStore extends Store<IntentEvent, IntentStoreDelegate> {
      */
     void addPending(IntentData intent);
 
+    void continueIntent(Key key);
+
     /**
      * Checks to see whether the calling instance is the master for processing
      * this intent, or more specifically, the key contained in this intent.

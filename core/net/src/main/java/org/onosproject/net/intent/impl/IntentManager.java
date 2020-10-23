@@ -279,6 +279,12 @@ public class IntentManager
     }
 
     @Override
+    public void continueIntent(Intent intent) {
+        checkNotNull(intent, INTENT_NULL);
+        store.continueIntent(intent.key());
+    }
+
+    @Override
     public Intent getIntent(Key key) {
         checkPermission(INTENT_READ);
         return store.getIntent(key);

@@ -56,6 +56,8 @@ public interface IntentService
      */
     void purge(Intent intent);
 
+    void continueIntent(Intent intent);
+
     /**
      * Fetches an intent based on its key.
      *

@@ -11,7 +11,7 @@ ONOS_ROOT=$(pushd $ONOS_ROOT >/dev/null && pwd -P && popd >/dev/null)
 
 # Rely on developer preference for automatically ignited apps
 # Default to drivers and gui2
-export ONOS_APPS=${ONOS_APPS:-drivers,openflow,gui2}
+export ONOS_APPS=${ONOS_APPS:-drivers,openflow,gui2,proxyarp}
 
 export MAVEN=${MAVEN:-~/Applications/apache-maven-3.3.9}
 

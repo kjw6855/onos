@@ -84,7 +84,7 @@ public final class OsgiPropertyConstants {
     public static final boolean HM_GREEDY_LEARNING_IPV6_DEFAULT = false;
 
     public static final String ICR_USE_FLOW_OBJECTIVES = "useFlowObjectives";
-    public static final boolean ICR_USE_FLOW_OBJECTIVES_DEFAULT = false;
+    public static final boolean ICR_USE_FLOW_OBJECTIVES_DEFAULT = true;
 
     public static final String ICR_LABEL_SELECTION = "labelSelection";
     public static final String ICR_LABEL_SELECTION_DEFAULT = "RANDOM";

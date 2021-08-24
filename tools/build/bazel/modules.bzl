@@ -207,6 +207,7 @@ APP_MAP = {
     "//apps/imr:onos-apps-imr-oar": [],
     "//apps/inbandtelemetry:onos-apps-inbandtelemetry-oar": ["tost"],
     "//apps/influxdbmetrics:onos-apps-influxdbmetrics-oar": [],
+    "//apps/intender-agent:onos-apps-intender-agent-oar": [],
     "//apps/intentsync:onos-apps-intentsync-oar": [],
     "//apps/k8s-networking:onos-apps-k8s-networking-oar": ["sona"],
     "//apps/k8s-node:onos-apps-k8s-node-oar": ["sona"],

@@ -141,15 +141,6 @@ public class IntenderInterface extends Thread {
                         Key key = Key.of(Long.decode(keyStr), appId);
                         log.info("{} intent appId:{}, key:{}", command, appIdStr, keyStr);
 
-                        // Get intent (is it needed?)
-                        Intent intent = app.intentService.getIntent(key);
-                        if (intent == null) {
-                            log.error("intent is not found: {}", key);
-                            out.println("error:Not found");
-                            out.flush();
-                            continue;
-                        }
-
                         line = in.readLine().trim();
                         if (line.startsWith("length:")) {
                             // Get length
@@ -162,12 +153,21 @@ public class IntenderInterface extends Thread {
                             data[readLen] = 0;
                             String dataStr = new String(data);
 
+                            // Get to-be-modified intent (is it needed?)
+//                            Intent intent = app.intentService.getIntent(key);
+//                            if (intent == null) {
+//                                log.error("intent is not found: {}", key);
+//                                out.println("error:Not found");
+//                                out.flush();
+//                                continue;
+//                            }
+
                             try {
                                 log.info("Parse data: {} ({} length)", dataStr, readLen);
                                 ObjectNode root = (ObjectNode) context.mapper().readTree(dataStr);
 
                                 log.info("Decode Json into intent: {}", root.toString());
-                                intent = context.codec(Intent.class).decode(root, context);
+                                Intent intent = context.codec(Intent.class).decode(root, context);
 
                                 log.info("Submit intent to service");
                                 app.intentService.submit(intent);

@@ -19,10 +19,15 @@ import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.SetMultimap;
+import org.onlab.util.Tools;
+import org.onosproject.net.flow.FlowRule.Builder;
+import org.onosproject.net.intent.impl.IntentManager;
 import org.onosproject.net.resource.impl.LabelAllocator;
+import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
+import org.osgi.service.component.annotations.Modified;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.onlab.util.Identifier;
@@ -48,6 +53,7 @@ import org.onosproject.net.intent.LinkCollectionIntent;
 import org.onosproject.net.intent.PathIntent;
 import org.onosproject.net.intent.constraint.EncapsulationConstraint;
 import org.onosproject.net.resource.ResourceService;
+import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -55,20 +61,28 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.onosproject.net.OsgiPropertyConstants.PAZZ_ENABLED;
+import static org.onosproject.net.OsgiPropertyConstants.PAZZ_ENABLED_DEFAULT;
 import static org.onosproject.net.domain.DomainId.LOCAL;
 import static org.onosproject.net.flow.instructions.Instruction.Type.NOACTION;
+import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  * Compiler to produce flow rules from link collections.
  */
-@Component(immediate = true)
+@Component(
+        immediate = true,
+        property = {
+                PAZZ_ENABLED + ":Boolean=" + PAZZ_ENABLED_DEFAULT
+        }
+)
 public class LinkCollectionIntentCompiler
         extends LinkCollectionCompiler<FlowRule>
         implements IntentCompiler<LinkCollectionIntent> {
 
     private static final String UNKNOWN_INSTRUCTION = "Unknown instruction type";
     private static final String UNSUPPORTED_INSTRUCTION = "Unsupported %s instruction";
-
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     protected IntentConfigurableRegistrator registrator;
@@ -81,6 +95,9 @@ public class LinkCollectionIntentCompiler
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     protected DomainService domainService;
+
+    private boolean pazzEnabled = PAZZ_ENABLED_DEFAULT;
+    protected final Logger log = getLogger(IntentManager.class);
 
     private ApplicationId appId;
 
@@ -96,6 +113,24 @@ public class LinkCollectionIntentCompiler
     @Deactivate
     public void deactivate() {
         registrator.unregisterCompiler(LinkCollectionIntent.class, false);
+    }
+
+    @Modified
+    public void modified(ComponentContext context) {
+
+        if (context == null) {
+            pazzEnabled = PAZZ_ENABLED_DEFAULT;
+            log.info("Restored default pazz-enable (true)");
+            return;
+        }
+
+        String s = Tools.get(context.getProperties(), PAZZ_ENABLED);
+        boolean enabled = isNullOrEmpty(s) ? pazzEnabled : Boolean.parseBoolean(s);
+        if (enabled != pazzEnabled) {
+            pazzEnabled = enabled;
+            log.info("Reconfigured pazz-enable: {}",
+                    pazzEnabled);
+        }
     }
 
     @Override
@@ -177,15 +212,19 @@ public class LinkCollectionIntentCompiler
                     instructions = new ForwardingInstructions(compactedTreatment, instructions.selector());
                 }
 
-                FlowRule rule = DefaultFlowRule.builder()
+                Builder builder = DefaultFlowRule.builder()
                         .forDevice(deviceId)
                         .withSelector(instructions.selector())
                         .withTreatment(instructions.treatment())
                         .withPriority(intent.priority())
                         .fromApp(appId)
-                        .makePermanent()
-                        .build();
-                rules.add(rule);
+                        .makePermanent();
+
+                if (PAZZ_ENABLED_DEFAULT) {
+                    builder.withVerifyPortId(Math.toIntExact(inport.toLong()));
+                }
+
+                rules.add(builder.build());
             }
         );
 

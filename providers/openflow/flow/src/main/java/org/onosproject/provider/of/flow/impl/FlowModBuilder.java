@@ -116,6 +116,9 @@ public abstract class FlowModBuilder {
     protected final Optional<DriverService> driverService;
     protected final DeviceId deviceId;
 
+    protected final int verifyPortId;
+    protected final int verifyRuleId;
+
     /**
      * Creates a new flow mod builder.
      *
@@ -159,6 +162,8 @@ public abstract class FlowModBuilder {
         this.xid = xid.orElse(0L);
         this.driverService = driverService;
         this.deviceId = flowRule.deviceId();
+        this.verifyPortId = flowRule.verifyPortId();
+        this.verifyRuleId = flowRule.verifyRuleId();
     }
 
     /**
@@ -554,6 +559,14 @@ public abstract class FlowModBuilder {
                 log.warn("Match type {} not yet implemented.", c.type());
             }
         }
+
+        if (verifyRuleId != 0) {
+            long verifyId = ((long)verifyRuleId << 32)
+                    | verifyPortId & 0xffffffffL;
+            mBuilder.setExact(MatchField.TUNNEL_ID,
+                    U64.of(verifyId));
+        }
+
         return mBuilder.build();
     }
 

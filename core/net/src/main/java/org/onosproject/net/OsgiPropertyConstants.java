@@ -163,4 +163,7 @@ public final class OsgiPropertyConstants {
 
     public static final String IFOM_OBJ_TIMEOUT_MS = "objectiveTimeoutMs";
     public static final int IFOM_OBJ_TIMEOUT_MS_DEFAULT = 15000;
+
+    public static final String PAZZ_ENABLED = "pazzEnabled";
+    public static final boolean PAZZ_ENABLED_DEFAULT = true;
 }

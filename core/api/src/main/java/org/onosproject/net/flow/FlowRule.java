@@ -167,6 +167,10 @@ public interface FlowRule extends PiTranslatable {
      */
     TableId table();
 
+    int verifyPortId();
+
+    int verifyRuleId();
+
     /**
      * {@inheritDoc}
      *
@@ -319,6 +323,8 @@ public interface FlowRule extends PiTranslatable {
          * @return this
          */
         Builder withReason(FlowRemoveReason reason);
+
+        Builder withVerifyPortId(int verifyPortId);
 
         /**
          * Builds a flow rule object.

@@ -22,8 +22,12 @@ import com.google.common.hash.Hashing;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.core.GroupId;
 import org.onosproject.net.DeviceId;
+import org.onosproject.net.flow.instructions.Instruction;
+import org.onosproject.net.flow.instructions.Instructions;
 
 import java.nio.ByteBuffer;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
@@ -385,6 +389,13 @@ public class DefaultFlowRule implements FlowRule {
 
             if (verifyPortId != 0) {
                 verifyRuleId = crc16() & 0xffff;
+                long verifyId = ((long)verifyRuleId << 32)
+                        | verifyPortId & 0xffffffffL;
+                TrafficTreatment newTreatment = DefaultTrafficTreatment.builder()
+                        .add(Instructions.modTunnelId(verifyId))
+                        .addTreatment(treatment)
+                        .build();
+                treatment = newTreatment;
             }
 
             return new DefaultFlowRule(deviceId, selector, treatment, priority,

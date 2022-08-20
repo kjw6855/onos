@@ -560,13 +560,6 @@ public abstract class FlowModBuilder {
             }
         }
 
-        if (verifyRuleId != 0) {
-            long verifyId = ((long)verifyRuleId << 32)
-                    | verifyPortId & 0xffffffffL;
-            mBuilder.setExact(MatchField.TUNNEL_ID,
-                    U64.of(verifyId));
-        }
-
         return mBuilder.build();
     }
 

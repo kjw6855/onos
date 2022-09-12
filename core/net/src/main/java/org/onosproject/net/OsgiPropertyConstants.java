@@ -99,7 +99,7 @@ public final class OsgiPropertyConstants {
     public static final boolean ICR_COPY_TTL_DEFAULT = false;
 
     public static final String ICU_ENABLED = "enabled";
-    public static final boolean ICU_ENABLED_DEFAULT = true;
+    public static final boolean ICU_ENABLED_DEFAULT = false;
 
     public static final String ICU_PERIOD = "period";
     public static final int ICU_PERIOD_DEFAULT = 5; //seconds

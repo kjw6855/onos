@@ -88,13 +88,13 @@ function do_requirements {
         libtool \
         make \
         pkg-config \
-        python2.7 \
-        python2.7-dev \
+        python \
+        python-dev \
         tcpdump \
         wget \
         unzip
 
-    sudo -H pip2.7 install setuptools cffi ipaddr ipaddress pypcap \
+    sudo -H pip install cffi ipaddr ipaddress pypcap \
         git+https://github.com/p4lang/scapy-vxlan \
         git+https://github.com/p4lang/ptf.git
 }
@@ -150,8 +150,8 @@ function do_protobuf {
     # Hack to get the -std=c++11 flag when building 3.6.1
     # https://github.com/protocolbuffers/protobuf/blob/v3.6.1/python/setup.py#L208
     export KOKORO_BUILD_NUMBER="hack"
-    sudo -E python2.7 setup.py build --cpp_implementation
-    sudo -E pip2.7 install .
+    sudo -E python setup.py build --cpp_implementation
+    sudo -E pip install .
     unset KOKORO_BUILD_NUMBER
 }
 
@@ -180,8 +180,8 @@ function do_grpc {
     sudo ldconfig
     unset LDFLAGS
 
-    sudo pip2.7 install -r requirements.txt
-    sudo pip2.7 install .
+    sudo pip install -r requirements.txt
+    sudo pip install .
 }
 
 function checkout_bmv2 {

@@ -24,7 +24,9 @@ import socket
 import sys
 import threading
 import time
-import urllib2
+#import urllib2
+import urllib.request
+import urllib.error
 from contextlib import closing
 from mininet.log import info, warn, debug
 from mininet.node import Switch, Host
@@ -98,7 +100,7 @@ def watchDog(sw):
                 else:
                     warn("\n*** WARN: switch %s died ☠️ \n" % sw.name)
                     sw.printBmv2Log()
-                    print ("-" * 80) + "\n"
+                    print(("-" * 80) + "\n")
                     return
     except Exception as e:
         warn("*** ERROR: " + e.message)
@@ -282,18 +284,19 @@ nodes {{
         # Build netcfg URL
         url = 'http://%s:8181/onos/v1/network/configuration/' % controllerIP
         # Instantiate password manager for HTTP auth
-        pm = urllib2.HTTPPasswordMgrWithDefaultRealm()
+        pm = urllib.request.HTTPPasswordMgrWithDefaultRealm()
         pm.add_password(None, url, ONOS_WEB_USER, ONOS_WEB_PASS)
-        urllib2.install_opener(urllib2.build_opener(
-            urllib2.HTTPBasicAuthHandler(pm)))
+        urllib.request.install_opener(urllib.request.build_opener(
+            urllib.request.HTTPBasicAuthHandler(pm)))
         # Push config data to controller
-        req = urllib2.Request(url, json.dumps(cfgData),
+        data = urllib.parse.urlencode(cfgData)
+        req = urllib.request.Request(url, data.encode("utf-8"),
                               {'Content-Type': 'application/json'})
         try:
-            f = urllib2.urlopen(req)
-            print f.read()
+            f = urllib.request.urlopen(req)
+            print(f.read())
             f.close()
-        except urllib2.URLError as e:
+        except urllib.error.URLError as e:
             warn("*** WARN: unable to push config to ONOS (%s)\n" % e.reason)
 
     def start(self, controllers):
@@ -428,14 +431,14 @@ nodes {{
 
     def printBmv2Log(self):
         if os.path.isfile(self.logfile):
-            print "-" * 80
-            print "%s log (from %s):" % (self.name, self.logfile)
+            print("-" * 80)
+            print("%s log (from %s):" % (self.name, self.logfile))
             with open(self.logfile, 'r') as f:
                 lines = f.readlines()
                 if len(lines) > BMV2_LOG_LINES:
-                    print "..."
+                    print("...")
                 for line in lines[-BMV2_LOG_LINES:]:
-                    print line.rstrip()
+                    print(line.rstrip())
 
     @staticmethod
     def controllerIp(controllers):

@@ -39,7 +39,10 @@
       "hamcrest-all",
       "hamcrest-optional",
       "com_google_guava_guava_testlib",
-      "//utils/junit:onlab-junit"
+      "//utils/junit:onlab-junit",
+      "edu_berkeley_cs_jqf_fuzz",
+      "com_pholser_junit-quickcheck-core",
+      "com_pholser_junit-quickcheck-generators"
     ],
     "TEST_ADAPTERS": [
       ":TEST",
@@ -338,6 +341,11 @@
     "stax2-api": "mvn:org.codehaus.woodstox:stax2-api:4.0.0",
     "concurrent-hashmap": "mvn:com.googlecode.concurrentlinkedhashmap:concurrentlinkedhashmap-lru:1.0",
     "gnu-idn": "mvn:org.gnu.inet:libidn:1.15",
-    "sigar":"mvn:org.knowhowlab.osgi:sigar:1.6.5_01"
+    "sigar":"mvn:org.knowhowlab.osgi:sigar:1.6.5_01",
+
+    // JQF
+    "edu_berkeley_cs_jqf_fuzz": "mvn:edu.berkeley.cs.jqf:jqf-fuzz:1.6",
+    "com_pholser_junit-quickcheck-core": "mvn:com.pholser:junit-quickcheck-core:0.8",
+    "com_pholser_junit-quickcheck-generators": "mvn:com.pholser:junit-quickcheck-generators:0.8"
   }
 }

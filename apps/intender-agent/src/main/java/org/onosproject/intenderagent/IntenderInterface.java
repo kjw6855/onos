@@ -78,7 +78,27 @@ public class IntenderInterface extends Thread {
                     else
                         command = command.trim();
 
-                    if (command.equals("ADD")) {
+                    if (command.equals("ADDRULE")) {
+                        String line = in.readLine().trim();
+                        if (line.startsWith("length:")) {
+                            // Get length
+                            int len = Integer.parseInt(line.substring("length:".length()));
+                            char[] data = new char[len + 1];
+
+                            // Read intentStr
+                            log.info("Read {} length", len);
+                            int readLen = in.read(data, 0, len);
+                            data[readLen] = 0;
+                            String dataStr = new String(data);
+
+                            log.info("Received: {}", dataStr);
+                            out.println("key:0");
+
+                        } else {
+                            out.println("error:wrong message");
+                        }
+
+                    } else if (command.equals("ADD")) {
                         String line = in.readLine().trim();
                         if (line.startsWith("length:")) {
                             // Get length

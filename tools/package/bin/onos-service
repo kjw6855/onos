@@ -15,7 +15,7 @@
 # set it based on this script's path.
 ONOS_HOME=${ONOS_HOME:-$(cd $(dirname $0)/.. >/dev/null 2>&1 && pwd)}
 
-JAVA_OPTS="${JAVA_OPTS:--XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Dkaraf.log.console=INFO -Dds.lock.timeout.milliseconds=10000}"
+JAVA_OPTS="${JAVA_OPTS:--javaagent:${ONOS_ROOT}/jacocoagent.jar=output=tcpserver -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Dkaraf.log.console=INFO -Dds.lock.timeout.milliseconds=10000}"
 if [ ! -z "$ONOS_YOURKIT" ]; then
   JAVA_OPTS+=" -agentpath:$ONOS_HOME/libyjpagent.so=listen=all"
 fi

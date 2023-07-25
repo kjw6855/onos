@@ -44,6 +44,7 @@ import org.onosproject.kubevirtnetworking.util.RulePopulatorUtil;
 import org.onosproject.kubevirtnode.api.KubevirtNode;
 import org.onosproject.kubevirtnode.api.KubevirtNodeService;
 import org.onosproject.net.Device;
+import org.onosproject.net.DeviceId;
 import org.onosproject.net.PortNumber;
 import org.onosproject.net.device.DeviceAdminService;
 import org.onosproject.net.driver.DriverService;
@@ -79,6 +80,7 @@ import static org.onosproject.kubevirtnetworking.api.Constants.PRIORITY_STATEFUL
 import static org.onosproject.kubevirtnetworking.api.Constants.TUNNEL_DEFAULT_TABLE;
 import static org.onosproject.kubevirtnetworking.api.KubevirtNetwork.Type.GENEVE;
 import static org.onosproject.kubevirtnetworking.api.KubevirtNetwork.Type.GRE;
+import static org.onosproject.kubevirtnetworking.api.KubevirtNetwork.Type.STT;
 import static org.onosproject.kubevirtnetworking.api.KubevirtNetwork.Type.VLAN;
 import static org.onosproject.kubevirtnetworking.api.KubevirtNetwork.Type.VXLAN;
 import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.buildGarpPacket;
@@ -318,7 +320,7 @@ public class KubevirtRoutingSnatHandler {
                 GW_DROP_TABLE,
                 install);
 
-        if (network.type() == VXLAN || network.type() == GENEVE || network.type() == GRE) {
+        if (network.type() == VXLAN || network.type() == GENEVE || network.type() == GRE || network.type() == STT) {
             setDownStreamRulesToGatewayTunBridge(network, gatewayNode, kubevirtPort, install);
         }
     }
@@ -383,12 +385,11 @@ public class KubevirtRoutingSnatHandler {
         TrafficSelector.Builder sBuilder = DefaultTrafficSelector.builder();
         TrafficTreatment.Builder tBuilder = DefaultTrafficTreatment.builder();
 
+        sBuilder.matchEthType(Ethernet.TYPE_IPV4);
+
         if (externalNetwork.type() == VLAN) {
-            sBuilder.matchEthType(Ethernet.TYPE_VLAN)
-                    .matchVlanId(VlanId.vlanId(externalNetwork.segmentId()));
+            sBuilder.matchVlanId(VlanId.vlanId(externalNetwork.segmentId()));
             tBuilder.popVlan();
-        } else {
-            sBuilder.matchEthType(Ethernet.TYPE_IPV4);
         }
 
         sBuilder.matchIPDst(IpPrefix.valueOf(routerSnatIp, 32));
@@ -715,6 +716,7 @@ public class KubevirtRoutingSnatHandler {
                                         gatewayNode, kubevirtPort, true);
                             });
                         });
+                sendGarpPacketForSnatIp(router);
             }
         }
 
@@ -725,7 +727,13 @@ public class KubevirtRoutingSnatHandler {
             }
 
             if (router.enableSnat() && !router.external().isEmpty() && router.peerRouter() != null) {
-                initGatewayNodeSnatForRouter(router, disAssociatedGateway, false);
+                DeviceId disAssociatedGatewayIntDeviceId = kubevirtNodeService.node(disAssociatedGateway).intgBridge();
+
+                //Only do this in case disassociated gateway device is still alive.
+                if (disAssociatedGatewayIntDeviceId != null &&
+                        deviceService.isAvailable(disAssociatedGatewayIntDeviceId)) {
+                    initGatewayNodeSnatForRouter(router, disAssociatedGateway, false);
+                }
                 initGatewayNodeSnatForRouter(router, router.electedGateway(), true);
 
                 processRouterGatewayNodeDetached(router, disAssociatedGateway);
@@ -781,6 +789,10 @@ public class KubevirtRoutingSnatHandler {
                     break;
                 case KUBEVIRT_PORT_REMOVED:
                     eventExecutor.execute(() -> processPortDeletion(event.subject()));
+                    break;
+                case KUBEVIRT_PORT_MIGRATED:
+                    eventExecutor.execute(() -> processPortCreation(event.subject()));
+                    eventExecutor.execute(() -> processPortDeletion(event.oldSubject()));
                     break;
                 default:
                     //do nothing

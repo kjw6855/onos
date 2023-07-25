@@ -176,7 +176,7 @@ public class KubevirtNodeWatcher {
             // due to the bugs in fabric8, node watcher might be closed,
             // we will re-instantiate the node watcher in this case
             // FIXME: https://github.com/fabric8io/kubernetes-client/issues/2135
-            log.warn("Node watcher OnClose, re-instantiate the node watcher...");
+            log.info("Node watcher OnClose, re-instantiate the node watcher...");
             instantiateNodeWatcher();
         }
 
@@ -185,10 +185,8 @@ public class KubevirtNodeWatcher {
                 return;
             }
 
-            log.trace("Process node {} creating event from API server.",
-                    node.getMetadata().getName());
-
             KubevirtNode kubevirtNode = buildKubevirtNode(node);
+            log.info("buildKubevirtNode: {}", kubevirtNode);
             if (kubevirtNode.type() == WORKER || kubevirtNode.type() == GATEWAY) {
                 if (!kubevirtNodeAdminService.hasNode(kubevirtNode.hostname())) {
                     kubevirtNodeAdminService.createNode(kubevirtNode);

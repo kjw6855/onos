@@ -31,6 +31,7 @@ public final class Constants {
     public static final String VXLAN = "vxlan";
     public static final String GRE = "gre";
     public static final String GENEVE = "geneve";
+    public static final String STT = "stt";
 
     public static final String INTEGRATION_BRIDGE = "br-int";
     public static final String TUNNEL_BRIDGE = "br-tun";
@@ -48,4 +49,11 @@ public final class Constants {
     public static final String DEFAULT_CLUSTER_NAME = "default";
 
     public static final String SONA_PROJECT_DOMAIN = "sonaproject.github.io";
+
+    // CLI item length
+    public static final int CLI_NAME_LENGTH = 30;
+    public static final int CLI_IP_ADDRESSES_LENGTH = 50;
+    public static final int CLI_IP_ADDRESS_LENGTH = 25;
+    public static final int CLI_MAC_ADDRESS_LENGTH = 25;
+    public static final int CLI_MARGIN_LENGTH = 2;
 }

@@ -270,7 +270,7 @@ public class KubevirtSecurityGroupHandler {
     }
 
     private void initializeConnTrackTable(DeviceId deviceId, int ctTable,
-                                            int forwardTable, boolean install) {
+                                          int forwardTable, boolean install) {
 
         // table={ACL_INGRESS_TABLE(44)},ip,ct_state=-trk, actions=ct(table:{ACL_CT_TABLE(45)})
         long ctState = computeCtStateFlag(false, false, false);
@@ -296,7 +296,7 @@ public class KubevirtSecurityGroupHandler {
     }
 
     private void initializeTenantAclTable(KubevirtNetwork network,
-                                            DeviceId deviceId, boolean install) {
+                                          DeviceId deviceId, boolean install) {
         // FIXME: in bridge initialization phase, some patch ports may not be
         // available until they are created, we wait for a while ensure all
         // patch ports are created via network bootstrap
@@ -305,7 +305,7 @@ public class KubevirtSecurityGroupHandler {
                 break;
             } else {
                 log.info("Wait for tenant patch ports creation for device {} " +
-                         "and network {}", deviceId, network.networkId());
+                        "and network {}", deviceId, network.networkId());
                 waitFor(5);
             }
         }
@@ -347,7 +347,7 @@ public class KubevirtSecurityGroupHandler {
     }
 
     private void initializeEgressTable(DeviceId deviceId, int egressTable,
-                                        int forwardTable, boolean install) {
+                                       int forwardTable, boolean install) {
         if (install) {
             flowRuleService.setUpTableMissEntry(deviceId, TENANT_ACL_EGRESS_TABLE);
         } else {
@@ -526,21 +526,21 @@ public class KubevirtSecurityGroupHandler {
         });
 
         TrafficSelector tSelector = DefaultTrafficSelector.builder()
-                        .matchEthType(Ethernet.TYPE_IPV4)
-                        .matchEthDst(port.macAddress())
-                        .matchIPDst(IpPrefix.valueOf(port.ipAddress(), 32))
-                        .build();
+                .matchEthType(Ethernet.TYPE_IPV4)
+                .matchEthDst(port.macAddress())
+                .matchIPDst(IpPrefix.valueOf(port.ipAddress(), 32))
+                .build();
         TrafficTreatment tTreatment = DefaultTrafficTreatment.builder()
-                        .transition(TENANT_ACL_INGRESS_TABLE)
-                        .build();
+                .transition(TENANT_ACL_INGRESS_TABLE)
+                .build();
 
         flowRuleService.setRule(appId,
-                    deviceId,
-                    tSelector,
-                    tTreatment,
-                    PRIORITY_ACL_RULE,
-                    TENANT_ACL_RECIRC_TABLE,
-                    install);
+                deviceId,
+                tSelector,
+                tTreatment,
+                PRIORITY_ACL_RULE,
+                TENANT_ACL_RECIRC_TABLE,
+                install);
     }
 
     /**
@@ -912,6 +912,10 @@ public class KubevirtSecurityGroupHandler {
                 case KUBEVIRT_PORT_DEVICE_ADDED:
                     eventExecutor.execute(() -> processPortDeviceAdded(event));
                     break;
+                case KUBEVIRT_PORT_MIGRATED:
+                    eventExecutor.execute(() -> processPortDeviceAdded(event));
+                    eventExecutor.execute(() -> processOldPortRemove(event));
+                    break;
                 default:
                     // do nothing for the other events
                     break;
@@ -924,7 +928,7 @@ public class KubevirtSecurityGroupHandler {
             }
 
             if (event.securityGroupId() == null ||
-                securityGroupService.securityGroup(event.securityGroupId()) == null) {
+                    securityGroupService.securityGroup(event.securityGroupId()) == null) {
                 return;
             }
 
@@ -944,7 +948,7 @@ public class KubevirtSecurityGroupHandler {
             }
 
             if (event.securityGroupId() == null ||
-                securityGroupService.securityGroup(event.securityGroupId()) == null) {
+                    securityGroupService.securityGroup(event.securityGroupId()) == null) {
                 return;
             }
 
@@ -970,7 +974,23 @@ public class KubevirtSecurityGroupHandler {
                     updateSecurityGroupRule(port, sgRule, false);
                 });
                 log.info("Removed security group {} from port {}",
-                                        sgStr, event.subject().macAddress());
+                        sgStr, event.subject().macAddress());
+            }
+        }
+
+        private void processOldPortRemove(KubevirtPortEvent event) {
+            if (!isRelevantHelper(event)) {
+                return;
+            }
+
+            KubevirtPort oldPort = event.oldSubject();
+            for (String sgStr : oldPort.securityGroups()) {
+                KubevirtSecurityGroup sg = securityGroupService.securityGroup(sgStr);
+                sg.rules().forEach(sgRule -> {
+                    updateSecurityGroupRule(oldPort, sgRule, false);
+                });
+                log.info("Removed security group {} from port {}",
+                        sgStr, event.subject().macAddress());
             }
         }
 
@@ -1110,32 +1130,32 @@ public class KubevirtSecurityGroupHandler {
 
             resetSecurityGroupRulesByNode(node);
         }
+    }
 
-        private void resetSecurityGroupRulesByNode(KubevirtNode node) {
-            if (getUseSecurityGroupFlag()) {
-                initializeProviderPipeline(node, true);
+    private void resetSecurityGroupRulesByNode(KubevirtNode node) {
+        if (getUseSecurityGroupFlag()) {
+            initializeProviderPipeline(node, true);
 
-                for (KubevirtNetwork network : networkService.tenantNetworks()) {
-                    initializeTenantPipeline(network, node, true);
-                }
-
-                securityGroupService.securityGroups().forEach(securityGroup ->
-                        securityGroup.rules().forEach(
-                                KubevirtSecurityGroupHandler.this::securityGroupRuleAdded));
-            } else {
-                initializeProviderPipeline(node, false);
-
-                for (KubevirtNetwork network : networkService.tenantNetworks()) {
-                    initializeTenantPipeline(network, node, false);
-                }
-
-                securityGroupService.securityGroups().forEach(securityGroup ->
-                        securityGroup.rules().forEach(
-                                KubevirtSecurityGroupHandler.this::securityGroupRuleRemoved));
+            for (KubevirtNetwork network : networkService.tenantNetworks()) {
+                initializeTenantPipeline(network, node, true);
             }
 
-            log.info("Reset security group info " +
-                    (getUseSecurityGroupFlag() ? "with" : "without") + " Security Group");
+            securityGroupService.securityGroups().forEach(securityGroup ->
+                    securityGroup.rules().forEach(
+                            KubevirtSecurityGroupHandler.this::securityGroupRuleAdded));
+        } else {
+            initializeProviderPipeline(node, false);
+
+            for (KubevirtNetwork network : networkService.tenantNetworks()) {
+                initializeTenantPipeline(network, node, false);
+            }
+
+            securityGroupService.securityGroups().forEach(securityGroup ->
+                    securityGroup.rules().forEach(
+                            KubevirtSecurityGroupHandler.this::securityGroupRuleRemoved));
         }
+
+        log.info("Reset security group info " +
+                (getUseSecurityGroupFlag() ? "with" : "without") + " Security Group");
     }
 }

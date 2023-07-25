@@ -21,6 +21,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
+import org.onlab.util.PredictableExecutor;
+import org.onlab.util.PredictableExecutor.PickyRunnable;
 import org.onlab.util.Tools;
 import org.onosproject.cfg.ComponentConfigService;
 import org.onosproject.cluster.ClusterService;
@@ -76,6 +78,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -143,17 +146,19 @@ public class FlowRuleManager
 
     private final FlowRuleDriverProvider driverProvider = new FlowRuleDriverProvider();
 
-    protected ExecutorService deviceInstallers =
-            Executors.newFixedThreadPool(32, groupedThreads("onos/flowservice", "device-installer-%d", log));
+    protected ExecutorService deviceInstallers = Executors.newFixedThreadPool(32,
+            groupedThreads("onos/flowservice", "device-installer-%d", log));
 
-    protected ExecutorService operationsService =
-            Executors.newFixedThreadPool(32, groupedThreads("onos/flowservice", "operations-%d", log));
+    protected ExecutorService operationsService = new PredictableExecutor(32,
+            groupedThreads("onos/flowservice", "operations-%d", log));
 
     private IdGenerator idGenerator;
 
     private final Map<Long, FlowOperationsProcessor> pendingFlowOperations = new ConcurrentHashMap<>();
 
     private NodeId local;
+
+    private Random randomGenerator = new Random();
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     protected FlowRuleStore store;
@@ -267,7 +272,7 @@ public class FlowRuleManager
                 log.info("Configured. FallbackFlowPollFrequency is {} seconds",
                          fallbackFlowPollFrequency);
             } catch (NumberFormatException e) {
-                log.warn("Configured fallbackFlowPollFrequency value '{}' " +
+                log.warn("Configured fallbackFlowPollFrequency value " +
                                  "is not a number, using current value of {} seconds",
                          fallbackFlowPollFrequency);
             }
@@ -312,11 +317,7 @@ public class FlowRuleManager
     public void applyFlowRules(FlowRule... flowRules) {
         checkPermission(FLOWRULE_WRITE);
 
-        FlowRuleOperations.Builder builder = FlowRuleOperations.builder();
-        for (FlowRule flowRule : flowRules) {
-            builder.add(flowRule);
-        }
-        apply(builder.build());
+        apply(buildFlowRuleOperations(true, null, flowRules));
     }
 
     @Override
@@ -339,11 +340,7 @@ public class FlowRuleManager
     public void removeFlowRules(FlowRule... flowRules) {
         checkPermission(FLOWRULE_WRITE);
 
-        FlowRuleOperations.Builder builder = FlowRuleOperations.builder();
-        for (FlowRule flowRule : flowRules) {
-            builder.remove(flowRule);
-        }
-        apply(builder.build());
+        apply(buildFlowRuleOperations(false, null, flowRules));
     }
 
     @Override
@@ -395,7 +392,26 @@ public class FlowRuleManager
     @Override
     public void apply(FlowRuleOperations ops) {
         checkPermission(FLOWRULE_WRITE);
-        operationsService.execute(new FlowOperationsProcessor(ops));
+        if (ops.stripeKey().isEmpty()) {
+            // Null means that we don't care about the in-order processing
+            // this approach maximizes the throughput but it can introduce
+            // consistency issues as the original order between conflictual
+            // writes is not maintained. If conflictual writes can be easily
+            // handled using different stages, this is the approach to use.
+            operationsService.execute(new FlowOperationsProcessor(ops));
+        } else {
+            // Following approach is suggested when it is hard to handle
+            // conflictual writes in the same FlowRuleOperations object. Apps
+            // may know there are conflictual writes but it could be hard to
+            // encapsulate them in the same object using different stages (above
+            // all if they are stimulated by different events). In this case,
+            // the probabilistic accumulation may help but it is brittle and based
+            // on the probability that a given event happens in a specific time.
+            // For this reason we have introduced PredictableFlowOperationsProcessor
+            // which uses the striped key (provided by the apps) to serialize the ops
+            // on the same executor.
+            operationsService.execute(new PredictableFlowOperationsProcessor(ops));
+        }
     }
 
     @Override
@@ -526,19 +542,38 @@ public class FlowRuleManager
             checkNotNull(flowEntry, FLOW_RULE_NULL);
             checkValidity();
             FlowEntry storedEntry = store.getFlowEntry(flowEntry);
-            if ((storedEntry != null && storedEntry.state() != FlowEntry.FlowEntryState.PENDING_REMOVE)
-                    && checkRuleLiveness(flowEntry, storedEntry)) {
-                FlowRuleEvent event = store.addOrUpdateFlowRule(flowEntry);
-                if (event == null) {
-                    log.debug("No flow store event generated.");
-                    return false;
-                } else {
-                    log.trace("Flow {} {}", flowEntry, event.type());
-                    post(event);
+            if (storedEntry != null) {
+                // Flow rule is still valid, let's try to update the stats
+                if (storedEntry.state() != FlowEntry.FlowEntryState.PENDING_REMOVE &&
+                        checkRuleLiveness(flowEntry, storedEntry)) {
+                    if (!shouldHandle(flowEntry.deviceId())) {
+                        return false;
+                    }
+                    FlowRuleEvent event = store.addOrUpdateFlowRule(flowEntry);
+                    // Something went wrong or there is no master or the device
+                    // is not available better check if it is the latter cases
+                    if (event == null) {
+                        log.debug("No flow store event generated for addOrUpdate of {}", flowEntry);
+                        return false;
+                    } else {
+                        log.trace("Flow {} {}", flowEntry, event.type());
+                        post(event);
+                    }
+                } else if (storedEntry.state() == FlowEntry.FlowEntryState.PENDING_REMOVE) {
+                    // Store is already in sync, let's re-issue flow removal only
+                    log.debug("Removing {} from the device", flowEntry);
+                    FlowRuleProvider frp = getProvider(flowEntry.deviceId());
+                    frp.removeFlowRule(flowEntry);
+                } else if (!checkRuleLiveness(flowEntry, storedEntry)) {
+                    // Update store first as the flow entry is expired. Then,
+                    // as consequence of this a flow removal will be sent.
+                    log.debug("Removing {}", flowEntry);
+                    removeFlowRules(flowEntry);
                 }
             } else {
-                log.debug("Removing flow rules....");
-                removeFlowRules(flowEntry);
+                // It was already removed or there is no master
+                // better check if it is the latter
+                return false;
             }
             return true;
         }
@@ -594,6 +629,11 @@ public class FlowRuleManager
             pushFlowMetricsInternal(deviceId, flowEntries, false);
         }
 
+        private boolean shouldHandle(DeviceId deviceId) {
+            NodeId master = mastershipService.getMasterFor(deviceId);
+            return Objects.equals(local, master) && deviceService.isAvailable(deviceId);
+        }
+
         private void pushFlowMetricsInternal(DeviceId deviceId, Iterable<FlowEntry> flowEntries,
                                              boolean useMissingFlow) {
             Map<FlowEntry, FlowEntry> storedRules = Maps.newHashMap();
@@ -611,17 +651,17 @@ public class FlowRuleManager
                             done = handleExistingFlow(rule);
                             if (!done) {
                                 // Mastership change can occur during this iteration
-                                master = mastershipService.getMasterFor(deviceId);
-                                if (!Objects.equals(local, master)) {
-                                    log.warn("Tried to update the flow stats while the node was not the master");
+                                if (!shouldHandle(deviceId)) {
+                                    log.warn("Tried to update the flow stats while the node was not the master" +
+                                            " or the device {} was not available", deviceId);
                                     return;
                                 }
                             }
                         } else {
                             // Mastership change can occur during this iteration
-                            master = mastershipService.getMasterFor(deviceId);
-                            if (!Objects.equals(local, master)) {
-                                log.warn("Tried to update the flows while the node was not the master");
+                            if (!shouldHandle(deviceId)) {
+                                log.warn("Tried to update the flows while the node was not the master" +
+                                        " or the device {} was not available", deviceId);
                                 return;
                             }
                             // the two rules are not an exact match - remove the
@@ -633,9 +673,9 @@ public class FlowRuleManager
                         // the device has a rule the store does not have
                         if (!allowExtraneousRules) {
                             // Mastership change can occur during this iteration
-                            master = mastershipService.getMasterFor(deviceId);
-                            if (!Objects.equals(local, master)) {
-                                log.warn("Tried to remove flows while the node was not the master");
+                            if (!shouldHandle(deviceId)) {
+                                log.warn("Tried to remove flows while the node was not the master" +
+                                        " or the device {} was not available", deviceId);
                                 return;
                             }
                             extraneousFlow(rule);
@@ -643,9 +683,9 @@ public class FlowRuleManager
                             FlowRuleEvent flowRuleEvent = store.addOrUpdateFlowRule(rule);
                             if (flowRuleEvent == null) {
                                 // Mastership change can occur during this iteration
-                                master = mastershipService.getMasterFor(deviceId);
-                                if (!Objects.equals(local, master)) {
-                                    log.warn("Tried to import flows while the node was not the master");
+                                if (!shouldHandle(deviceId)) {
+                                    log.warn("Tried to import flows while the node was not the master" +
+                                            " or the device {} was not available", deviceId);
                                     return;
                                 }
                             }
@@ -661,9 +701,9 @@ public class FlowRuleManager
             if (useMissingFlow) {
                 for (FlowEntry rule : storedRules.keySet()) {
                     // Mastership change can occur during this iteration
-                    master = mastershipService.getMasterFor(deviceId);
-                    if (!Objects.equals(local, master)) {
-                        log.warn("Tried to install missing rules while the node was not the master");
+                    if (!shouldHandle(deviceId)) {
+                        log.warn("Tried to install missing rules while the node was not the master" +
+                                " or the device {} was not available", deviceId);
                         return;
                     }
                     try {
@@ -769,12 +809,12 @@ public class FlowRuleManager
 
     private class FlowOperationsProcessor implements Runnable {
         // Immutable
-        private final FlowRuleOperations fops;
+        protected final FlowRuleOperations fops;
 
         // Mutable
-        private final List<Set<FlowRuleOperation>> stages;
-        private final Set<DeviceId> pendingDevices = new HashSet<>();
-        private boolean hasFailed = false;
+        protected final List<Set<FlowRuleOperation>> stages;
+        protected final Set<DeviceId> pendingDevices = new HashSet<>();
+        protected boolean hasFailed = false;
 
         FlowOperationsProcessor(FlowRuleOperations ops) {
             this.stages = Lists.newArrayList(ops.stages());
@@ -790,7 +830,7 @@ public class FlowRuleManager
             }
         }
 
-        private void process(Set<FlowRuleOperation> ops) {
+        protected void process(Set<FlowRuleOperation> ops) {
             Multimap<DeviceId, FlowRuleBatchEntry> perDeviceBatches = ArrayListMultimap.create();
 
             for (FlowRuleOperation op : ops) {
@@ -829,6 +869,91 @@ public class FlowRuleManager
         }
     }
 
+    // Provides in-order processing in the local instance. The main difference with its
+    // ancestor is that the runnable ends when all the stages have been processed. Instead,
+    // its ancestor ends as soon as one stage has been processed and cannot guarantee in-order
+    // processing between subsequent stages and a new FlowRuleOperation (having the same key).
+    private class PredictableFlowOperationsProcessor extends FlowOperationsProcessor implements PickyRunnable {
+
+        private static final int WAIT_TIMEOUT = 5000;
+        private static final int WAIT_ATTEMPTS = 3;
+
+        PredictableFlowOperationsProcessor(FlowRuleOperations ops) {
+            super(ops);
+        }
+
+        @Override
+        public void run() {
+            try {
+                while (!stages.isEmpty()) {
+                    process(stages.remove(0));
+                    synchronized (this) {
+                        // Batch in flights - let's wait
+                        int attempts = 0;
+                        while (!pendingDevices.isEmpty() && attempts < WAIT_ATTEMPTS) {
+                            this.wait(WAIT_TIMEOUT);
+                            attempts++;
+                        }
+                        // Something wrong, we cannot block all the pipeline
+                        if (attempts == WAIT_ATTEMPTS) {
+                            break;
+                        }
+                    }
+                }
+            } catch (InterruptedException e) {
+                // Interrupted case
+                if (log.isTraceEnabled()) {
+                    log.trace("Interrupted while waiting for {} stages to be completed",
+                            stages.size());
+                }
+            }
+
+            synchronized (this) {
+                if (stages.isEmpty() && !hasFailed && pendingDevices.isEmpty()) {
+                    // No error and it is done, signal success to the apps
+                    fops.callback().onSuccess(fops);
+                } else {
+                    // It was interrupted or there is a failure - signal error.
+                    // This may introduce a duplicate error in some cases but
+                    // better than nothing and keeping the apps blocked forever.
+                    FlowRuleOperations.Builder failedOpsBuilder = FlowRuleOperations.builder();
+                    if (!stages.isEmpty()) {
+                        stages.remove(0).forEach(flowRuleOperation -> failedOpsBuilder.add(
+                                flowRuleOperation.rule()));
+                    }
+                    fops.callback().onError(failedOpsBuilder.build());
+                }
+            }
+        }
+
+        @Override
+        synchronized void satisfy(DeviceId devId) {
+            pendingDevices.remove(devId);
+            if (pendingDevices.isEmpty()) {
+                this.notifyAll();
+            }
+        }
+
+        @Override
+        synchronized void fail(DeviceId devId, Set<? extends FlowRule> failures) {
+            hasFailed = true;
+            pendingDevices.remove(devId);
+            if (pendingDevices.isEmpty()) {
+                this.notifyAll();
+            }
+
+            FlowRuleOperations.Builder failedOpsBuilder = FlowRuleOperations.builder();
+            failures.forEach(failedOpsBuilder::add);
+
+            fops.callback().onError(failedOpsBuilder.build());
+        }
+
+        @Override
+        public int hint() {
+            return fops.stripeKey().orElse(randomGenerator.nextInt());
+        }
+    }
+
     @Override
     public Iterable<TableStatisticsEntry> getFlowTableStatistics(DeviceId deviceId) {
         checkPermission(FLOWRULE_READ);
@@ -842,6 +967,35 @@ public class FlowRuleManager
         return store.getActiveFlowRuleCount(deviceId);
     }
 
+    @Override
+    public void applyFlowRules(int key, FlowRule... flowRules) {
+        checkPermission(FLOWRULE_WRITE);
+
+        apply(buildFlowRuleOperations(true, key, flowRules));
+    }
+
+    @Override
+    public void removeFlowRules(int key, FlowRule... flowRules) {
+        checkPermission(FLOWRULE_WRITE);
+
+        apply(buildFlowRuleOperations(false, key, flowRules));
+    }
+
+    private FlowRuleOperations buildFlowRuleOperations(boolean add, Integer key, FlowRule... flowRules) {
+        FlowRuleOperations.Builder builder = FlowRuleOperations.builder();
+        for (FlowRule flowRule : flowRules) {
+            if (add) {
+                builder.add(flowRule);
+            } else {
+                builder.remove(flowRule);
+            }
+        }
+        if (key != null) {
+            builder.striped(key);
+        }
+        return builder.build();
+    }
+
     private class InternalDeviceListener implements DeviceListener {
         @Override
         public void event(DeviceEvent event) {
@@ -851,7 +1005,7 @@ public class FlowRuleManager
                     DeviceId deviceId = event.subject().id();
                     if (!deviceService.isAvailable(deviceId)) {
                         BasicDeviceConfig cfg = netCfgService.getConfig(deviceId, BasicDeviceConfig.class);
-                        //if purgeOnDisconnection is set for the device or it's a global configuration
+                        // if purgeOnDisconnection is set for the device or it's a global configuration
                         // lets remove the flows. Priority is given to the per device flag
                         boolean purge = cfg != null && cfg.isPurgeOnDisconnectionConfigured() ?
                                 cfg.purgeOnDisconnection() : purgeOnDisconnection;

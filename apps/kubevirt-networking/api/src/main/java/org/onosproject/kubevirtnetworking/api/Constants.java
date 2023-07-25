@@ -28,6 +28,9 @@ public final class Constants {
     public static final String KUBEVIRT_NETWORKING_APP_ID =
             "org.onosproject.kubevirtnetworking";
     public static final String DEFAULT_GATEWAY_MAC_STR = "fe:00:00:00:00:02";
+    public static final String KUBERNETES_EXTERNAL_LB_FAKE_MAC_STR = "de:00:00:00:00:01";
+    public static final MacAddress KUBERNETES_EXTERNAL_LB_FAKE_MAC =
+            MacAddress.valueOf(KUBERNETES_EXTERNAL_LB_FAKE_MAC_STR);
     public static final MacAddress DEFAULT_GATEWAY_MAC =
                         MacAddress.valueOf(DEFAULT_GATEWAY_MAC_STR);
 
@@ -85,6 +88,8 @@ public final class Constants {
     // CLI item length
     public static final int CLI_ID_LENGTH = 30;
     public static final int CLI_NAME_LENGTH = 30;
+    public static final int CLI_LONG_NAME_LENGTH = 50;
+    public static final int CLI_LONG_SERVICE_PORT_LENGTH = 100;
     public static final int CLI_IP_ADDRESSES_LENGTH = 50;
     public static final int CLI_IP_ADDRESS_LENGTH = 25;
     public static final int CLI_IP_ADDRESS_AVAILABILITY = 15;
@@ -103,7 +108,11 @@ public final class Constants {
     public static final int CLI_MARGIN_LENGTH = 2;
 
     public static final int PRIORITY_STATEFUL_SNAT_RULE = 40500;
-    public static final int PRIORITY_FLOATING_IP_RULE = 40800;
+    public static final int PRIORITY_FLOATING_IP_UPSTREAM_RULE = 40800;
+    public static final int PRIORITY_FLOATING_IP_DOWNSTREAM_RULE = 40700;
+    public static final int PRIORITY_ELB_UPSTREAM_RULE = 39000;
+    public static final int PRIORITY_ELB_DOWNSTREAM_RULE = 39500;
+
     public static final int PRIORITY_INTERNAL_ROUTING_RULE = 41000;
     public static final int PRIORITY_LB_RULE = 41500;
     public static final int PRIORITY_LB_FIP_RULE = 41500;

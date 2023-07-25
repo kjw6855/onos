@@ -29,6 +29,8 @@ public class KubevirtPortEvent extends AbstractEvent<KubevirtPortEvent.Type, Kub
     private final String securityGroupId;
     private final DeviceId deviceId;
 
+    private final KubevirtPort oldPort;
+
     /**
      * Creates an event of a given type for the specified port.
      *
@@ -39,6 +41,7 @@ public class KubevirtPortEvent extends AbstractEvent<KubevirtPortEvent.Type, Kub
         super(type, subject);
         securityGroupId = null;
         deviceId = null;
+        oldPort = null;
     }
 
     /**
@@ -52,6 +55,7 @@ public class KubevirtPortEvent extends AbstractEvent<KubevirtPortEvent.Type, Kub
         super(type, subject);
         this.securityGroupId = securityGroupId;
         this.deviceId = null;
+        this.oldPort = null;
     }
 
     /**
@@ -64,6 +68,22 @@ public class KubevirtPortEvent extends AbstractEvent<KubevirtPortEvent.Type, Kub
     public KubevirtPortEvent(Type type, KubevirtPort subject, DeviceId deviceId) {
         super(type, subject);
         this.deviceId = deviceId;
+        this.oldPort = null;
+        this.securityGroupId = null;
+    }
+
+    /**
+     * Creates an event of a given type of the specified port.
+     *
+     * @param type              kubevirt port event type
+     * @param subject           kubevirt port subject
+     * @param oldSubject        kubevirt old port object
+     * @param deviceId          kubevirt device ID
+     */
+    public KubevirtPortEvent(Type type, KubevirtPort subject, KubevirtPort oldSubject, DeviceId deviceId) {
+        super(type, subject);
+        this.deviceId = deviceId;
+        this.oldPort = oldSubject;
         this.securityGroupId = null;
     }
 
@@ -93,6 +113,11 @@ public class KubevirtPortEvent extends AbstractEvent<KubevirtPortEvent.Type, Kub
         KUBEVIRT_PORT_DEVICE_ADDED,
 
         /**
+         * Signifies that the kubevirt port has been migrated to another device.
+         */
+        KUBEVIRT_PORT_MIGRATED,
+
+        /**
          * Signifies that the kubevirt security group rule is added to a specific port.
          */
         KUBEVIRT_PORT_SECURITY_GROUP_ADDED,
@@ -110,6 +135,15 @@ public class KubevirtPortEvent extends AbstractEvent<KubevirtPortEvent.Type, Kub
      */
     public String securityGroupId() {
         return securityGroupId;
+    }
+
+    /**
+     * Returns the old subject.
+     *
+     * @return old subject
+     */
+    public KubevirtPort oldSubject() {
+        return oldPort;
     }
 
     @Override

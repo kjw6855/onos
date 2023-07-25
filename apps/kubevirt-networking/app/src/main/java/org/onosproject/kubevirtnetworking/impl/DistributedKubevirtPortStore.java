@@ -51,6 +51,7 @@ import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static org.onlab.util.Tools.groupedThreads;
 import static org.onosproject.kubevirtnetworking.api.KubevirtPortEvent.Type.KUBEVIRT_PORT_CREATED;
 import static org.onosproject.kubevirtnetworking.api.KubevirtPortEvent.Type.KUBEVIRT_PORT_DEVICE_ADDED;
+import static org.onosproject.kubevirtnetworking.api.KubevirtPortEvent.Type.KUBEVIRT_PORT_MIGRATED;
 import static org.onosproject.kubevirtnetworking.api.KubevirtPortEvent.Type.KUBEVIRT_PORT_REMOVED;
 import static org.onosproject.kubevirtnetworking.api.KubevirtPortEvent.Type.KUBEVIRT_PORT_SECURITY_GROUP_ADDED;
 import static org.onosproject.kubevirtnetworking.api.KubevirtPortEvent.Type.KUBEVIRT_PORT_SECURITY_GROUP_REMOVED;
@@ -217,6 +218,12 @@ public class DistributedKubevirtPortStore
             if (oldDeviceId == null && newDeviceId != null) {
                 notifyDelegate(new KubevirtPortEvent(
                         KUBEVIRT_PORT_DEVICE_ADDED, newPort, newDeviceId
+                ));
+            }
+
+            if (oldDeviceId != null && newDeviceId != null && !oldDeviceId.equals(newDeviceId)) {
+                notifyDelegate(new KubevirtPortEvent(
+                        KUBEVIRT_PORT_MIGRATED, newPort, oldPort, newDeviceId
                 ));
             }
         }

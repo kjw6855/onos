@@ -60,6 +60,7 @@ public class KubevirtSecurityGroupManager
     private static final String MSG_SG_RULE = "Kubevirt security group rule %s %s";
 
     private static final String MSG_CREATED = "created";
+    private static final String MSG_UPDATED = "updated";
     private static final String MSG_REMOVED = "removed";
 
     private static final String ERR_NULL_SG =
@@ -114,6 +115,7 @@ public class KubevirtSecurityGroupManager
         checkArgument(!Strings.isNullOrEmpty(sg.id()), ERR_NULL_SG_ID);
 
         sgStore.updateSecurityGroup(sg);
+        log.info(String.format(MSG_SG, sg.name(), MSG_UPDATED));
     }
 
     @Override

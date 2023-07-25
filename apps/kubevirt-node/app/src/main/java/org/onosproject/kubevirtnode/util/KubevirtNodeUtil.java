@@ -15,6 +15,8 @@
  */
 package org.onosproject.kubevirtnode.util;
 
+import com.eclipsesource.json.JsonArray;
+import com.eclipsesource.json.JsonObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,17 +29,18 @@ import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.kubernetes.client.DefaultKubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import org.apache.commons.lang.StringUtils;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 import org.onlab.packet.IpAddress;
+import org.onlab.packet.MacAddress;
+import org.onosproject.kubevirtnode.api.DefaultKubernetesExternalLbInterface;
 import org.onosproject.kubevirtnode.api.DefaultKubevirtNode;
 import org.onosproject.kubevirtnode.api.DefaultKubevirtPhyInterface;
+import org.onosproject.kubevirtnode.api.KubernetesExternalLbInterface;
 import org.onosproject.kubevirtnode.api.KubevirtApiConfig;
 import org.onosproject.kubevirtnode.api.KubevirtNode;
 import org.onosproject.kubevirtnode.api.KubevirtNodeState;
 import org.onosproject.kubevirtnode.api.KubevirtPhyInterface;
 import org.onosproject.net.Device;
+import org.onosproject.net.DeviceId;
 import org.onosproject.net.behaviour.BridgeConfig;
 import org.onosproject.net.behaviour.BridgeName;
 import org.onosproject.net.device.DeviceService;
@@ -80,12 +83,19 @@ public final class KubevirtNodeUtil {
     private static final String ZERO = "0";
     private static final String INTERNAL_IP = "InternalIP";
     private static final String K8S_ROLE = "node-role.kubernetes.io";
+    private static final String CONTROL_PLANE = "control-plane";
     private static final String PHYSNET_CONFIG_KEY = SONA_PROJECT_DOMAIN + "/physnet-config";
     private static final String DATA_IP_KEY = SONA_PROJECT_DOMAIN + "/data-ip";
     private static final String GATEWAY_CONFIG_KEY = SONA_PROJECT_DOMAIN + "/gateway-config";
     private static final String GATEWAY_BRIDGE_NAME = "gatewayBridgeName";
+    private static final String EXTERNAL_LB_CONFIG_KEY = SONA_PROJECT_DOMAIN + "/externalLb-config";
+    private static final String EXTERNAL_LB_BRIDGE_NAME = "externalLbBridgeName";
+    private static final String EXTERNAL_LB_IP_KEY = SONA_PROJECT_DOMAIN + "/externalLb-ip";
+    private static final String EXTERNAL_LB_GATEWAY_IP_KEY = SONA_PROJECT_DOMAIN + "/externalLb-gateway-ip";
+    private static final String EXTERNAL_LB_GATEWAY_MAC_KEY = SONA_PROJECT_DOMAIN + "/externalLb-gateway-mac";
     private static final String NETWORK_KEY = "network";
     private static final String INTERFACE_KEY = "interface";
+    private static final String PHYS_BRIDGE_ID = "physBridgeId";
 
     private static final int PORT_NAME_MAX_LENGTH = 15;
 
@@ -317,6 +327,36 @@ public final class KubevirtNodeUtil {
     }
 
     /**
+     * Returns the type of the given kubernetes node.
+     *
+     * @param node kubernetes node
+     * @return node type
+     */
+    public static KubevirtNode.Type getNodeType(Node node) {
+        Set<String> rolesFull = node.getMetadata().getLabels().keySet().stream()
+                .filter(l -> l.contains(K8S_ROLE))
+                .collect(Collectors.toSet());
+
+        KubevirtNode.Type nodeType = WORKER;
+
+        for (String roleStr : rolesFull) {
+            String role = roleStr.split("/")[1];
+            if (CONTROL_PLANE.equalsIgnoreCase(role) || MASTER.name().equalsIgnoreCase(role)) {
+                nodeType = MASTER;
+                break;
+            }
+        }
+
+        Map<String, String> annots = node.getMetadata().getAnnotations();
+        String gatewayConfig = annots.get(GATEWAY_CONFIG_KEY);
+        if (gatewayConfig != null) {
+            nodeType = GATEWAY;
+        }
+
+        return nodeType;
+    }
+
+    /**
      * Returns the kubevirt node from the node.
      *
      * @param node a raw node object returned from a k8s client
@@ -342,7 +382,7 @@ public final class KubevirtNodeUtil {
 
         for (String roleStr : rolesFull) {
             String role = roleStr.split("/")[1];
-            if (MASTER.name().equalsIgnoreCase(role)) {
+            if (CONTROL_PLANE.equalsIgnoreCase(role) || MASTER.name().equalsIgnoreCase(role)) {
                 nodeType = MASTER;
                 break;
             }
@@ -355,18 +395,42 @@ public final class KubevirtNodeUtil {
         String dataIpStr = annots.get(DATA_IP_KEY);
         Set<KubevirtPhyInterface> phys = new HashSet<>();
         String gatewayBridgeName = null;
+
+        String elbConfig = annots.get(EXTERNAL_LB_CONFIG_KEY);
+        String elbIpStr = annots.get(EXTERNAL_LB_IP_KEY);
+        String elbGwIpStr = annots.get(EXTERNAL_LB_GATEWAY_IP_KEY);
+        String elbGwMacStr = annots.get(EXTERNAL_LB_GATEWAY_MAC_KEY);
+        String elbBridgeName = null;
+        IpAddress elbIp = null;
+        IpAddress elbGwIp = null;
+        MacAddress elbGwMac = null;
+
+        KubernetesExternalLbInterface kubernetesExternalLbInterface = null;
+
         try {
             if (physnetConfig != null) {
-                JSONArray configJson = new JSONArray(physnetConfig);
+                JsonArray configJson = JsonArray.readFrom(physnetConfig);
 
-                for (int i = 0; i < configJson.length(); i++) {
-                    JSONObject object = configJson.getJSONObject(i);
-                    String network = object.getString(NETWORK_KEY);
-                    String intf = object.getString(INTERFACE_KEY);
+                for (int i = 0; i < configJson.size(); i++) {
+                    JsonObject object = configJson.get(i).asObject();
+                    String network = object.get(NETWORK_KEY).asString();
+                    String intf = object.get(INTERFACE_KEY).asString();
 
                     if (network != null && intf != null) {
+                        String physBridgeId;
+                        if (object.get(PHYS_BRIDGE_ID) != null) {
+                            physBridgeId = object.get(PHYS_BRIDGE_ID).asString();
+                        } else {
+                            physBridgeId = genDpidFromName(network + intf + hostname);
+                            log.trace("host {} physnet dpid for network {} intf {} is null so generate dpid {}",
+                                    hostname, network, intf, physBridgeId);
+                        }
+
                         phys.add(DefaultKubevirtPhyInterface.builder()
-                                .network(network).intf(intf).build());
+                                .network(network)
+                                .intf(intf)
+                                .physBridge(DeviceId.deviceId(physBridgeId))
+                                .build());
                     }
                 }
             }
@@ -380,8 +444,27 @@ public final class KubevirtNodeUtil {
 
                 nodeType = GATEWAY;
                 gatewayBridgeName = jsonNode.get(GATEWAY_BRIDGE_NAME).asText();
+
+                if (elbConfig != null && elbIpStr != null && elbGwIpStr != null) {
+                    JsonNode elbJsonNode = new ObjectMapper().readTree(elbConfig);
+
+                    elbBridgeName = elbJsonNode.get(EXTERNAL_LB_BRIDGE_NAME).asText();
+                    elbIp = IpAddress.valueOf(elbIpStr);
+                    elbGwIp = IpAddress.valueOf(elbGwIpStr);
+
+                    if (elbGwMacStr != null) {
+                        elbGwMac = MacAddress.valueOf(elbGwMacStr);
+                    }
+
+                    kubernetesExternalLbInterface = DefaultKubernetesExternalLbInterface.builder()
+                            .externalLbBridgeName(elbBridgeName)
+                            .externalLbIp(elbIp)
+                            .externallbGwIp(elbGwIp)
+                            .externalLbGwMac(elbGwMac)
+                            .build();
+                }
             }
-        } catch (JSONException | JsonProcessingException e) {
+        } catch (JsonProcessingException e) {
             log.error("Failed to parse physnet config or gateway config object", e);
         }
 
@@ -410,7 +493,22 @@ public final class KubevirtNodeUtil {
                 .state(KubevirtNodeState.ON_BOARDED)
                 .phyIntfs(phys)
                 .gatewayBridgeName(gatewayBridgeName)
+                .kubernetesExternalLbInterface(kubernetesExternalLbInterface)
                 .build();
+    }
+
+    /**
+     * Generates a unique dpid from given name.
+     *
+     * @param name name
+     * @return device id in string
+     */
+    public static String genDpidFromName(String name) {
+        if (name != null) {
+            String hexString = Integer.toHexString(name.hashCode());
+            return OF_PREFIX + Strings.padStart(hexString, 16, '0');
+        }
+        return null;
     }
 
     /**

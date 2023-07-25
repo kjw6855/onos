@@ -1,7 +1,6 @@
 BUNDLES = JACKSON + [
     "//apps/kubevirt-node/api:onos-apps-kubevirt-node-api",
     "//apps/kubevirt-node/app:onos-apps-kubevirt-node-app",
-    "@json//jar",
     "@commons_net//jar",
     "@k8s_client//jar",
     "@k8s_model//jar",
@@ -15,6 +14,7 @@ BUNDLES = JACKSON + [
     "@k8s_model_certificates//jar",
     "@k8s_model_coordination//jar",
     "@k8s_model_discovery//jar",
+    "@k8s_model_flowcontrol//jar",
     "@k8s_model_metrics//jar",
     "@k8s_model_scheduling//jar",
     "@k8s_model_storageclass//jar",

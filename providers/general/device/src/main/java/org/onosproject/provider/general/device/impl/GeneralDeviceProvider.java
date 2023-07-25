@@ -19,6 +19,7 @@ package org.onosproject.provider.general.device.impl;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.Futures;
+import org.apache.commons.lang3.tuple.Pair;
 import org.onlab.packet.ChassisId;
 import org.onlab.util.ItemNotFoundException;
 import org.onlab.util.SharedScheduledExecutors;
@@ -110,7 +111,7 @@ import static org.slf4j.LoggerFactory.getLogger;
 @Component(immediate = true,
         property = {
                 CHECKUP_INTERVAL + ":Integer=" + CHECKUP_INTERVAL_DEFAULT,
-                STATS_POLL_INTERVAL + ":Integer=" + STATS_POLL_INTERVAL_DEFAULT,
+                STATS_POLL_INTERVAL + ":Integer=" + STATS_POLL_INTERVAL_DEFAULT
         })
 public class GeneralDeviceProvider extends AbstractProvider
         implements DeviceProvider {
@@ -123,6 +124,11 @@ public class GeneralDeviceProvider extends AbstractProvider
             "org.onosproject.general.provider.device";
     private static final int CORE_POOL_SIZE = 10;
     private static final String UNKNOWN = "unknown";
+
+    // We have measured a grace period of 5s with the
+    // current devices - giving some time more to absorb
+    // any fluctuation.
+    private static final int GRACE_PERIOD = 8000;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     private DeviceProviderRegistry providerRegistry;
@@ -187,6 +193,9 @@ public class GeneralDeviceProvider extends AbstractProvider
     private StatsPoller statsPoller;
     private DeviceProviderService providerService;
 
+    private final Map<DeviceId, Pair<MastershipRole, Integer>> lastRoleRequest =
+            Maps.newConcurrentMap();
+
     public GeneralDeviceProvider() {
         super(new ProviderId(URI_SCHEME, DEVICE_PROVIDER_PACKAGE));
     }
@@ -199,7 +208,7 @@ public class GeneralDeviceProvider extends AbstractProvider
     public void activate(ComponentContext context) {
         mainExecutor = newFixedThreadPool(CORE_POOL_SIZE, groupedThreads(
                 "onos/gdp", "%d", log));
-        taskExecutor = new DeviceTaskExecutor<>(mainExecutor);
+        taskExecutor = new DeviceTaskExecutor<>(mainExecutor, GDP_ALLOWLIST);
         providerService = providerRegistry.register(this);
         componentConfigService.registerProperties(getClass());
         coreService.registerApplication(APP_NAME);
@@ -324,7 +333,13 @@ public class GeneralDeviceProvider extends AbstractProvider
                 break;
             case NONE:
                 // No preference for NONE, apply as is.
-                log.info("Notifying role {} to {}", newRole, deviceId);
+                Pair<MastershipRole, Integer> pairRolePref = Pair.of(newRole, -1);
+                if (log.isDebugEnabled()) {
+                    log.debug("Notifying role {} to {}", newRole, deviceId);
+                } else if (!pairRolePref.equals(lastRoleRequest.get(deviceId))) {
+                    log.info("Notifying role {} to {}", newRole, deviceId);
+                }
+                lastRoleRequest.put(deviceId, pairRolePref);
                 handshaker.roleChanged(newRole);
                 return;
             default:
@@ -332,8 +347,15 @@ public class GeneralDeviceProvider extends AbstractProvider
                 return;
         }
 
-        log.info("Notifying role {} (preference {}) for term {} to {}",
-                 newRole, preference, mastershipInfo.term(), deviceId);
+        Pair<MastershipRole, Integer> pairRolePref = Pair.of(newRole, preference);
+        if (log.isDebugEnabled()) {
+            log.debug("Notifying role {} (preference {}) for term {} to {}",
+                    newRole, preference, mastershipInfo.term(), deviceId);
+        } else if (!pairRolePref.equals(lastRoleRequest.get(deviceId))) {
+            log.info("Notifying role {} (preference {}) for term {} to {}",
+                    newRole, preference, mastershipInfo.term(), deviceId);
+        }
+        lastRoleRequest.put(deviceId, pairRolePref);
 
         try {
             handshaker.roleChanged(preference, mastershipInfo.term());
@@ -399,6 +421,28 @@ public class GeneralDeviceProvider extends AbstractProvider
         checkNotNull(deviceId);
         log.info("Triggering disconnection of device {}", deviceId);
         submitTask(deviceId, TaskType.CONNECTION_TEARDOWN);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> probeReachability(DeviceId deviceId) {
+        final DeviceHandshaker handshaker = getBehaviour(
+                deviceId, DeviceHandshaker.class);
+        if (handshaker == null) {
+            return CompletableFuture.completedFuture(false);
+        }
+        return handshaker.probeReachability();
+    }
+
+    @Override
+    public int gracePeriod() {
+        return GRACE_PERIOD;
+    }
+
+    private boolean probeReachabilitySync(DeviceId deviceId) {
+        // Wait 3/4 of the checkup interval and make sure the thread
+        // is not blocked more than the checkUpInterval
+        return Tools.futureGetOrElse(probeReachability(deviceId), (checkupInterval * 3000 / 4),
+                TimeUnit.MILLISECONDS, Boolean.FALSE);
     }
 
     /**
@@ -560,6 +604,9 @@ public class GeneralDeviceProvider extends AbstractProvider
         NOT_MASTER,
     }
 
+    private static final Set<TaskType> GDP_ALLOWLIST = Sets.newHashSet(TaskType.ROLE_MASTER, TaskType.ROLE_NONE,
+            TaskType.ROLE_STANDBY, TaskType.NOT_MASTER);
+
     private void submitTask(DeviceId deviceId, TaskType taskType) {
         taskExecutor.submit(deviceId, taskType, taskRunnable(deviceId, taskType));
     }
@@ -648,22 +695,20 @@ public class GeneralDeviceProvider extends AbstractProvider
         if (deviceService.getDevice(deviceId) != null &&
                 deviceService.isAvailable(deviceId) == available &&
                 storeDescription != null) {
-            /*
-             * FIXME SDFAB-650 rethink the APIs and abstractions around the DeviceStore.
-             * Device registration is a two-step process for the GDP. Initially, the device is
-             * registered with default avail. to false. Later, the checkup task will update the
-             * description with the default avail to true in order to mark it available. Today,
-             * there is only one API to mark online a device from the device provider which is
-             * deviceConnected which assumes an update on the device description. The device provider
-             * is the only one able to update the device description and we have to make sure that
-             * the default avail. is flipped to true as it is used to mark as online the device when
-             * it is created or updated. Otherwise, if an ONOS instance fails and restarts, when re-joining
-             * the cluster, it will get the device marked as offline and will not be able to update
-             * its status until it become the master. This process concurs with the markOnline done
-             * by the background thread in the DeviceManager and its the reason why we cannot just check
-             * the device availability but we need to compare also the desc. Checking here the equality,
-             * as in general we may want to upgrade the device description at run time.
-             */
+            // FIXME SDFAB-650 rethink the APIs and abstractions around the DeviceStore.
+            //  Device registration is a two-step process for the GDP. Initially, the device is
+            //  registered with default avail. to false. Later, the checkup task will update the
+            //  description with the default avail to true in order to mark it available. Today,
+            //  there is only one API to mark online a device from the device provider which is
+            //  deviceConnected which assumes an update on the device description. The device provider
+            //  is the only one able to update the device description and we have to make sure that
+            //  the default avail. is flipped to true as it is used to mark as online the device when
+            //  it is created or updated. Otherwise, if an ONOS instance fails and restarts, when re-joining
+            //  the cluster, it will get the device marked as offline and will not be able to update
+            //  its status until it become the master. This process concurs with the markOnline done
+            //  by the background thread in the DeviceManager and its the reason why we cannot just check
+            //  the device availability but we need to compare also the desc. Checking here the equality,
+            //  as in general we may want to upgrade the device description at run time.
             DeviceDescription testDeviceDescription = DefaultDeviceDescription.copyReplacingAnnotation(
                     deviceDescription, storeDescription.annotations());
             if (testDeviceDescription.equals(storeDescription)) {
@@ -721,16 +766,12 @@ public class GeneralDeviceProvider extends AbstractProvider
         // If here, device should be registered in the core.
         assertDeviceRegistered(deviceId);
 
-        if (!handshaker.isReachable()) {
+        if (!handshaker.isReachable() || !probeReachabilitySync(deviceId)) {
             // Device appears to be offline.
             markOfflineIfNeeded(deviceId);
-            // While we expect the protocol layer to implement some sort of
+            // We expect the protocol layer to implement some sort of
             // connection backoff mechanism and to signal availability via
-            // CHANNEL_OPEN events, we stimulate some channel activity now.
-            // Trigger probe over the network and forget about it (not waiting
-            // for future to complete). If channel is ready, we expect to come
-            // back here via a CHANNEL_OPEN event.
-            handshaker.probeReachability();
+            // CHANNEL_OPEN events.
             return;
         }
 
@@ -765,14 +806,24 @@ public class GeneralDeviceProvider extends AbstractProvider
         }
 
         final MastershipRole deviceRole = handshaker.getRole();
+        // FIXME: we should be checking the mastership term as well.
         if (expectedRole != deviceRole) {
-            // FIXME: we should be checking the mastership term as well.
-            log.debug("Detected role mismatch for {}, core expects {}, " +
-                             "but device reports {}, waiting for mastership " +
-                             "service  to fix this...",
-                     deviceId, expectedRole, deviceRole);
-            // Gentle nudge to fix things...
-            providerService.receivedRoleReply(deviceId, deviceRole);
+            // Let's be greedy, if the role is NONE likely is due to the lazy channel
+            if (deviceRole == MastershipRole.NONE) {
+                log.warn("Detected role mismatch for {}, core expects {}, " +
+                                "but device reports {}, reassert the role... ",
+                        deviceId, expectedRole, deviceRole);
+                // If we are experiencing a severe issue, eventually
+                // the DeviceManager will move the mastership
+                roleChanged(deviceId, expectedRole);
+            } else {
+                log.debug("Detected role mismatch for {}, core expects {}, " +
+                                "but device reports {}, waiting for mastership " +
+                                "service  to fix this...",
+                        deviceId, expectedRole, deviceRole);
+                // Gentle nudge to fix things...
+                providerService.receivedRoleReply(deviceId, deviceRole);
+            }
             return;
         }
 

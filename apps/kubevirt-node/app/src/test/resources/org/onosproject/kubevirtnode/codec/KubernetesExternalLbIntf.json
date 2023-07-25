@@ -1,0 +1,6 @@
+{
+  "externalLbBridgeName": "elbnet",
+  "externalLbIp": "10.10.10.2",
+  "externalLbGwIp": "10.10.10.1",
+  "externalLbGwMac": "aa:bb:cc:dd:ee:ff"
+}

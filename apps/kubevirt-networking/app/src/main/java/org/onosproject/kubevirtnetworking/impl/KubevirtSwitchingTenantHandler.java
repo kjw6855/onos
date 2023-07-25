@@ -404,6 +404,10 @@ public class KubevirtSwitchingTenantHandler {
                 case KUBEVIRT_PORT_REMOVED:
                     eventExecutor.execute(() -> processPortRemoval(event.subject()));
                     break;
+                case KUBEVIRT_PORT_MIGRATED:
+                    eventExecutor.execute(() -> processPortUpdate(event.subject()));
+                    eventExecutor.execute(() -> processPortRemoval(event.oldSubject()));
+                    break;
                 default:
                     // do nothing
                     break;

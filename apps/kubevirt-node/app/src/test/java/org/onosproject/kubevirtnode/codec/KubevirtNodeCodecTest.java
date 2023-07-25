@@ -23,12 +23,15 @@ import org.hamcrest.MatcherAssert;
 import org.junit.Before;
 import org.junit.Test;
 import org.onlab.packet.IpAddress;
+import org.onlab.packet.MacAddress;
 import org.onosproject.codec.CodecContext;
 import org.onosproject.codec.JsonCodec;
 import org.onosproject.codec.impl.CodecManager;
 import org.onosproject.core.CoreService;
+import org.onosproject.kubevirtnode.api.DefaultKubernetesExternalLbInterface;
 import org.onosproject.kubevirtnode.api.DefaultKubevirtNode;
 import org.onosproject.kubevirtnode.api.DefaultKubevirtPhyInterface;
+import org.onosproject.kubevirtnode.api.KubernetesExternalLbInterface;
 import org.onosproject.kubevirtnode.api.KubevirtNode;
 import org.onosproject.kubevirtnode.api.KubevirtNodeState;
 import org.onosproject.kubevirtnode.api.KubevirtPhyInterface;
@@ -56,18 +59,25 @@ public class KubevirtNodeCodecTest {
 
     JsonCodec<KubevirtNode> kubevirtNodeCodec;
     JsonCodec<KubevirtPhyInterface> kubevirtPhyInterfaceJsonCodec;
+    JsonCodec<KubernetesExternalLbInterface> kubernetesExternalLbInterfaceJsonCodec;
 
     final CoreService mockCoreService = createMock(CoreService.class);
     private static final String REST_APP_ID = "org.onosproject.rest";
+    private static final DeviceId DEVICE_ID_1 = DeviceId.deviceId(String.format("of:%016d", 1));
+    private static final DeviceId DEVICE_ID_2 = DeviceId.deviceId(String.format("of:%016d", 2));
+    private static final DeviceId DEVICE_ID_3 = DeviceId.deviceId(String.format("of:%016d", 3));
+
 
     @Before
     public void setUp() {
         context = new MockCodecContext();
         kubevirtNodeCodec = new KubevirtNodeCodec();
         kubevirtPhyInterfaceJsonCodec = new KubevirtPhyInterfaceCodec();
+        kubernetesExternalLbInterfaceJsonCodec = new KubernetesExternalLbInterfaceCodec();
 
         assertThat(kubevirtNodeCodec, notNullValue());
         assertThat(kubevirtPhyInterfaceJsonCodec, notNullValue());
+        assertThat(kubernetesExternalLbInterfaceJsonCodec, notNullValue());
 
         expect(mockCoreService.registerApplication(REST_APP_ID))
                 .andReturn(APP_ID).anyTimes();
@@ -83,11 +93,13 @@ public class KubevirtNodeCodecTest {
         KubevirtPhyInterface phyIntf1 = DefaultKubevirtPhyInterface.builder()
                 .network("mgmtnetwork")
                 .intf("eth3")
+                .physBridge(DEVICE_ID_1)
                 .build();
 
         KubevirtPhyInterface phyIntf2 = DefaultKubevirtPhyInterface.builder()
                 .network("oamnetwork")
                 .intf("eth4")
+                .physBridge(DEVICE_ID_2)
                 .build();
 
         KubevirtNode node = DefaultKubevirtNode.builder()
@@ -125,9 +137,11 @@ public class KubevirtNodeCodecTest {
         node.phyIntfs().forEach(intf -> {
             if (intf.network().equals("mgmtnetwork")) {
                 assertThat(intf.intf(), is("eth3"));
+                assertThat(intf.physBridge().toString(), is("of:00000000000000a3"));
             }
             if (intf.network().equals("oamnetwork")) {
                 assertThat(intf.intf(), is("eth4"));
+                assertThat(intf.physBridge().toString(), is("of:00000000000000a4"));
             }
         });
     }
@@ -146,6 +160,15 @@ public class KubevirtNodeCodecTest {
      */
     @Test
     public void testKubevirtGatweayNodeEncode() {
+
+        KubernetesExternalLbInterface kubernetesExternalLbInterface =
+                DefaultKubernetesExternalLbInterface.builder()
+                        .externalLbBridgeName("elbnetwork")
+                        .externalLbIp(IpAddress.valueOf("10.10.10.2"))
+                        .externallbGwIp(IpAddress.valueOf("10.10.10.1"))
+                        .externalLbGwMac(MacAddress.valueOf("aa:bb:cc:dd:ee:ff"))
+                        .build();
+
         KubevirtNode node = DefaultKubevirtNode.builder()
                 .hostname("gateway")
                 .type(KubevirtNode.Type.GATEWAY)
@@ -155,10 +178,12 @@ public class KubevirtNodeCodecTest {
                 .tunBridge(DeviceId.deviceId("br-tun"))
                 .dataIp(IpAddress.valueOf("20.20.20.2"))
                 .gatewayBridgeName("gateway")
+                .kubernetesExternalLbInterface(kubernetesExternalLbInterface)
                 .build();
 
         ObjectNode nodeJson = kubevirtNodeCodec.encode(node, context);
         assertThat(nodeJson, matchesKubevirtNode(node));
+
     }
 
     /**
@@ -170,6 +195,8 @@ public class KubevirtNodeCodecTest {
     public void testKubevirtGatewayNodeDecode() throws IOException {
         KubevirtNode node = getKubevirtNode("KubevirtGatewayNode.json");
 
+        KubernetesExternalLbInterface externalLbInterface = node.kubernetesExternalLbInterface();
+
         assertThat(node.hostname(), is("gateway-01"));
         assertThat(node.type().name(), is("GATEWAY"));
         assertThat(node.managementIp().toString(), is("172.16.130.4"));
@@ -177,6 +204,10 @@ public class KubevirtNodeCodecTest {
         assertThat(node.intgBridge().toString(), is("of:00000000000000a1"));
         assertThat(node.tunBridge().toString(), is("of:00000000000000a2"));
         assertThat(node.gatewayBridgeName(), is("gateway"));
+        assertThat(externalLbInterface.externalLbBridgeName(), is("elbnet"));
+        assertThat(externalLbInterface.externalLbIp().toString(), is("10.10.10.2"));
+        assertThat(externalLbInterface.externalLbGwIp().toString(), is("10.10.10.1"));
+        assertThat(externalLbInterface.externalLbGwMac().toString(), is("AA:BB:CC:DD:EE:FF"));
     }
 
     /**
@@ -205,6 +236,10 @@ public class KubevirtNodeCodecTest {
         public <T> JsonCodec<T> codec(Class<T> entityClass) {
             if (entityClass == KubevirtPhyInterface.class) {
                 return (JsonCodec<T>) kubevirtPhyInterfaceJsonCodec;
+            }
+
+            if (entityClass == KubernetesExternalLbInterface.class) {
+                return (JsonCodec<T>) kubernetesExternalLbInterfaceJsonCodec;
             }
 
             return manager.getCodec(entityClass);

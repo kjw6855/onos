@@ -22,6 +22,7 @@ import org.onlab.packet.IpAddress;
 import org.onosproject.codec.CodecContext;
 import org.onosproject.codec.JsonCodec;
 import org.onosproject.kubevirtnode.api.DefaultKubevirtNode;
+import org.onosproject.kubevirtnode.api.KubernetesExternalLbInterface;
 import org.onosproject.kubevirtnode.api.KubevirtNode;
 import org.onosproject.kubevirtnode.api.KubevirtNodeState;
 import org.onosproject.kubevirtnode.api.KubevirtPhyInterface;
@@ -52,8 +53,9 @@ public final class KubevirtNodeCodec extends JsonCodec<KubevirtNode> {
     private static final String STATE = "state";
     private static final String PHYSICAL_INTERFACES = "phyIntfs";
     private static final String GATEWAY_BRIDGE_NAME = "gatewayBridgeName";
+    private static final String KUBERNETES_EXTERNAL_LB_INTERFACE = "kubernetesExternalLbInterface";
 
-    private static final String MISSING_MESSAGE = " is required in OpenstackNode";
+    private static final String MISSING_MESSAGE = " is required in KubevirtNode";
 
     @Override
     public ObjectNode encode(KubevirtNode node, CodecContext context) {
@@ -94,6 +96,13 @@ public final class KubevirtNodeCodec extends JsonCodec<KubevirtNode> {
         // serialize external bridge if exist
         if (node.gatewayBridgeName() != null) {
             result.put(GATEWAY_BRIDGE_NAME, node.gatewayBridgeName());
+        }
+
+        // serialize kubernetex external load balancer interface if exist
+        if (node.kubernetesExternalLbInterface() != null) {
+            ObjectNode elbIntfJson = context.codec(KubernetesExternalLbInterface.class)
+                    .encode(node.kubernetesExternalLbInterface(), context);
+            result.put(KUBERNETES_EXTERNAL_LB_INTERFACE, elbIntfJson.toString());
         }
 
         return result;
@@ -151,7 +160,19 @@ public final class KubevirtNodeCodec extends JsonCodec<KubevirtNode> {
             nodeBuilder.gatewayBridgeName(externalBridgeJson.asText());
         }
 
-        log.trace("node is {}", nodeBuilder.build().toString());
+        JsonNode elbIntfJson = json.get(KUBERNETES_EXTERNAL_LB_INTERFACE);
+
+        if (elbIntfJson != null) {
+            final JsonCodec<KubernetesExternalLbInterface>
+                    kubernetesExternalLbInterfaceCodecJsonCodec = context.codec(KubernetesExternalLbInterface.class);
+            ObjectNode elbIntfObjNode = elbIntfJson.deepCopy();
+
+            nodeBuilder.kubernetesExternalLbInterface(
+                    kubernetesExternalLbInterfaceCodecJsonCodec.decode(elbIntfObjNode, context));
+
+        }
+
+        log.trace("node is {}", nodeBuilder.build());
 
         return nodeBuilder.build();
     }

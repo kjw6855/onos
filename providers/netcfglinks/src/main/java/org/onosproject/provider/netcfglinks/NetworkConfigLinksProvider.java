@@ -140,7 +140,7 @@ public class NetworkConfigLinksProvider
     private AtomicReference<ClusterMetadata> clusterMetadata = new AtomicReference<>();
 
     public NetworkConfigLinksProvider() {
-        super(new ProviderId("lldp", PROVIDER_NAME));
+        super(new ProviderId("netcfglinks", PROVIDER_NAME));
     }
 
     private String buildSrcMac() {
@@ -519,7 +519,11 @@ public class NetworkConfigLinksProvider
     private class InternalConfigListener implements NetworkConfigListener {
 
         private void addLink(LinkKey linkKey) {
+            DefaultLinkDescription linkDescription =
+                    new DefaultLinkDescription(linkKey.src(), linkKey.dst(),
+                            Link.Type.DIRECT);
             configuredLinks.add(linkKey);
+            providerService.linkDetected(linkDescription);
         }
 
         private void removeLink(LinkKey linkKey) {

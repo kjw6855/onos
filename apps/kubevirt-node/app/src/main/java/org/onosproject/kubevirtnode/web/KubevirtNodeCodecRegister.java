@@ -16,9 +16,11 @@
 package org.onosproject.kubevirtnode.web;
 
 import org.onosproject.codec.CodecService;
+import org.onosproject.kubevirtnode.api.KubernetesExternalLbInterface;
 import org.onosproject.kubevirtnode.api.KubevirtApiConfig;
 import org.onosproject.kubevirtnode.api.KubevirtNode;
 import org.onosproject.kubevirtnode.api.KubevirtPhyInterface;
+import org.onosproject.kubevirtnode.codec.KubernetesExternalLbInterfaceCodec;
 import org.onosproject.kubevirtnode.codec.KubevirtApiConfigCodec;
 import org.onosproject.kubevirtnode.codec.KubevirtNodeCodec;
 import org.onosproject.kubevirtnode.codec.KubevirtPhyInterfaceCodec;
@@ -47,6 +49,7 @@ public class KubevirtNodeCodecRegister {
         codecService.registerCodec(KubevirtNode.class, new KubevirtNodeCodec());
         codecService.registerCodec(KubevirtPhyInterface.class, new KubevirtPhyInterfaceCodec());
         codecService.registerCodec(KubevirtApiConfig.class, new KubevirtApiConfigCodec());
+        codecService.registerCodec(KubernetesExternalLbInterface.class, new KubernetesExternalLbInterfaceCodec());
 
         log.info("Started");
     }
@@ -56,6 +59,7 @@ public class KubevirtNodeCodecRegister {
         codecService.unregisterCodec(KubevirtNode.class);
         codecService.unregisterCodec(KubevirtPhyInterface.class);
         codecService.unregisterCodec(KubevirtApiConfig.class);
+        codecService.unregisterCodec(KubernetesExternalLbInterface.class);
 
         log.info("Stopped");
     }

@@ -45,6 +45,8 @@ import org.onosproject.kubevirtnetworking.api.KubevirtRouter;
 import org.onosproject.kubevirtnetworking.api.KubevirtRouterAdminService;
 import org.onosproject.kubevirtnetworking.api.KubevirtRouterEvent;
 import org.onosproject.kubevirtnetworking.api.KubevirtRouterListener;
+import org.onosproject.kubevirtnetworking.util.RulePopulatorUtil;
+import org.onosproject.kubevirtnode.api.KubernetesExternalLbInterface;
 import org.onosproject.kubevirtnode.api.KubevirtApiConfigService;
 import org.onosproject.kubevirtnode.api.KubevirtNode;
 import org.onosproject.kubevirtnode.api.KubevirtNodeEvent;
@@ -109,10 +111,12 @@ import static org.onosproject.kubevirtnetworking.api.Constants.TUNNEL_DEFAULT_TA
 import static org.onosproject.kubevirtnetworking.api.Constants.TUNNEL_TO_TENANT_PREFIX;
 import static org.onosproject.kubevirtnetworking.api.KubevirtNetwork.Type.FLAT;
 import static org.onosproject.kubevirtnetworking.api.KubevirtNetwork.Type.VLAN;
+import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.elbPatchPortNum;
 import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.gatewayNodeForSpecifiedRouter;
 import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.getRouterForKubevirtNetwork;
 import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.getRouterForKubevirtPort;
 import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.getRouterMacAddress;
+import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.kubernetesElbMac;
 import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.portNumber;
 import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.resolveHostname;
 import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.segmentIdHex;
@@ -469,6 +473,7 @@ public class KubevirtNetworkHandler {
             case VXLAN:
             case GRE:
             case GENEVE:
+            case STT:
                 setDefaultEgressRuleToGatewayNode(router, network,
                         electedGateway.intgBridge(), install);
                 kubevirtNodeService.completeNodes(WORKER).forEach(node -> {
@@ -1208,6 +1213,7 @@ public class KubevirtNetworkHandler {
                 case VXLAN:
                 case GRE:
                 case GENEVE:
+                case STT:
                     initIntegrationTunnelBridge(network);
                     break;
                 case FLAT:
@@ -1228,6 +1234,7 @@ public class KubevirtNetworkHandler {
                 case VXLAN:
                 case GRE:
                 case GENEVE:
+                case STT:
                     purgeIntegrationTunnelBridge(network);
                     break;
                 case FLAT:
@@ -1301,6 +1308,7 @@ public class KubevirtNetworkHandler {
                         case VXLAN:
                         case GRE:
                         case GENEVE:
+                        case STT:
                             if (network.segmentId() == null) {
                                 continue;
                             }
@@ -1320,6 +1328,12 @@ public class KubevirtNetworkHandler {
                 }
             } else if (node.type().equals(GATEWAY)) {
                 updateGatewayNodeForRouter();
+
+                KubernetesExternalLbInterface externalLbInterface = node.kubernetesExternalLbInterface();
+
+                if (externalLbInterface != null) {
+                    setElbInternalIpArpResponseRules(node, true);
+                }
             }
         }
 
@@ -1354,6 +1368,49 @@ public class KubevirtNetworkHandler {
                 kubevirtRouterService.updateRouter(router.updatedElectedGateway(newGwNode.hostname()));
             });
         }
+
+        private void setElbInternalIpArpResponseRules(KubevirtNode gateway, boolean install) {
+            KubernetesExternalLbInterface externalLbInterface = gateway.kubernetesExternalLbInterface();
+            if (externalLbInterface == null) {
+                return;
+            }
+
+            IpAddress eIp = externalLbInterface.externalLbIp();
+
+            MacAddress elbIntfMac = kubernetesElbMac(deviceService, gateway);
+            if (elbIntfMac == null) {
+                return;
+            }
+
+            TrafficSelector selector = DefaultTrafficSelector.builder()
+                    .matchInPort(elbPatchPortNum(deviceService, gateway))
+                    .matchEthType(EthType.EtherType.ARP.ethType().toShort())
+                    .matchArpOp(ARP.OP_REQUEST)
+                    .matchArpTpa(eIp.getIp4Address())
+                    .build();
+
+            Device device = deviceService.getDevice(gateway.intgBridge());
+
+            TrafficTreatment treatment = DefaultTrafficTreatment.builder()
+                    .extension(RulePopulatorUtil.buildMoveEthSrcToDstExtension(device), device.id())
+                    .extension(RulePopulatorUtil.buildMoveArpShaToThaExtension(device), device.id())
+                    .extension(RulePopulatorUtil.buildMoveArpSpaToTpaExtension(device), device.id())
+                    .setArpOp(ARP.OP_REPLY)
+                    .setEthSrc(elbIntfMac)
+                    .setArpSha(elbIntfMac)
+                    .setArpSpa(eIp.getIp4Address())
+                    .setOutput(PortNumber.IN_PORT)
+                    .build();
+
+            flowService.setRule(
+                    appId,
+                    gateway.intgBridge(),
+                    selector,
+                    treatment,
+                    PRIORITY_ARP_GATEWAY_RULE,
+                    GW_ENTRY_TABLE,
+                    install);
+        }
     }
 
     private class InternalKubevirtPortListener implements KubevirtPortListener {
@@ -1373,6 +1430,10 @@ public class KubevirtNetworkHandler {
                     break;
                 case KUBEVIRT_PORT_REMOVED:
                     eventExecutor.execute(() -> processPortDeletion(event.subject()));
+                    break;
+                case KUBEVIRT_PORT_MIGRATED:
+                    eventExecutor.execute(() -> processPortCreation(event.subject()));
+                    eventExecutor.execute(() -> processPortDeletion(event.oldSubject()));
                     break;
                 default:
                     //do nothing

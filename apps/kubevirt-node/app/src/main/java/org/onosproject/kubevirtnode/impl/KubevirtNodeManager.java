@@ -24,6 +24,7 @@ import org.onosproject.cluster.LeadershipService;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.core.CoreService;
 import org.onosproject.event.ListenerRegistry;
+import org.onosproject.kubevirtnode.api.KubernetesExternalLbInterface;
 import org.onosproject.kubevirtnode.api.KubevirtNode;
 import org.onosproject.kubevirtnode.api.KubevirtNodeAdminService;
 import org.onosproject.kubevirtnode.api.KubevirtNodeEvent;
@@ -59,8 +60,10 @@ import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static org.onlab.util.Tools.groupedThreads;
 import static org.onosproject.kubevirtnode.api.Constants.INTEGRATION_BRIDGE;
 import static org.onosproject.kubevirtnode.api.Constants.TUNNEL_BRIDGE;
+import static org.onosproject.kubevirtnode.api.KubevirtNode.Type.GATEWAY;
 import static org.onosproject.kubevirtnode.impl.OsgiPropertyConstants.OVSDB_PORT;
 import static org.onosproject.kubevirtnode.impl.OsgiPropertyConstants.OVSDB_PORT_NUM_DEFAULT;
+import static org.onosproject.kubevirtnode.util.KubevirtNodeUtil.genDpidFromName;
 import static org.slf4j.LoggerFactory.getLogger;
 
 /**
@@ -274,6 +277,23 @@ public class KubevirtNodeManager
     }
 
     @Override
+    public Set<KubevirtNode> completeExternalLbGatewayNodes() {
+        Set<KubevirtNode> nodes = nodeStore.nodes().stream()
+                .filter(node -> node.type() == GATEWAY &&
+                        node.state() == KubevirtNodeState.COMPLETE)
+                .filter(node -> {
+                    KubernetesExternalLbInterface externalLbInterface = node.kubernetesExternalLbInterface();
+
+                    if (externalLbInterface != null) {
+                        return true;
+                    }
+                    return false;
+                })
+                .collect(Collectors.toSet());
+        return ImmutableSet.copyOf(nodes);
+    }
+
+    @Override
     public KubevirtNode node(String hostname) {
         return nodeStore.node(hostname);
     }
@@ -305,6 +325,19 @@ public class KubevirtNodeManager
                 .findFirst().orElse(null);
     }
 
+    @Override
+    public KubevirtNode nodeByPhyBridge(DeviceId deviceId) {
+        return nodeStore.nodes().stream()
+                .filter(node -> hasPhyBridge(node, deviceId))
+                .findAny()
+                .orElse(null);
+    }
+
+    private boolean hasPhyBridge(KubevirtNode node, DeviceId deviceId) {
+        return node.phyIntfs().stream()
+                .anyMatch(phyIntf -> phyIntf.physBridge().equals(deviceId));
+    }
+
     private boolean hasIntgBridge(DeviceId deviceId, String hostname) {
         Optional<KubevirtNode> existNode = nodeStore.nodes().stream()
                 .filter(n -> !n.hostname().equals(hostname))
@@ -321,15 +354,6 @@ public class KubevirtNodeManager
                 .findFirst();
 
         return existNode.isPresent();
-    }
-
-    private String genDpidFromName(String name) {
-        if (name != null) {
-            String hexString = Integer.toHexString(name.hashCode());
-            return OF_PREFIX + Strings.padStart(hexString, 16, '0');
-        }
-
-        return null;
     }
 
     private class InternalNodeStoreDelegate implements KubevirtNodeStoreDelegate {

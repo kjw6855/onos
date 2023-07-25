@@ -19,6 +19,7 @@ import com.google.common.base.MoreObjects;
 import org.apache.commons.lang.StringUtils;
 import org.onlab.osgi.DefaultServiceDirectory;
 import org.onlab.packet.IpAddress;
+import org.onlab.packet.MacAddress;
 import org.onosproject.net.DeviceId;
 import org.onosproject.net.Port;
 import org.onosproject.net.PortNumber;
@@ -35,6 +36,7 @@ import static org.onosproject.kubevirtnode.api.Constants.DEFAULT_CLUSTER_NAME;
 import static org.onosproject.kubevirtnode.api.Constants.GENEVE;
 import static org.onosproject.kubevirtnode.api.Constants.GRE;
 import static org.onosproject.kubevirtnode.api.Constants.INTEGRATION_TO_PHYSICAL_PREFIX;
+import static org.onosproject.kubevirtnode.api.Constants.STT;
 import static org.onosproject.kubevirtnode.api.Constants.VXLAN;
 import static org.onosproject.net.AnnotationKeys.PORT_NAME;
 
@@ -57,6 +59,7 @@ public class DefaultKubevirtNode implements KubevirtNode {
     private final KubevirtNodeState state;
     private final Collection<KubevirtPhyInterface> phyIntfs;
     private final String gatewayBridgeName;
+    private final KubernetesExternalLbInterface kubernetesExternalLbIntf;
 
     /**
      * A default constructor of kubevirt node.
@@ -71,13 +74,15 @@ public class DefaultKubevirtNode implements KubevirtNode {
      * @param state             node state
      * @param phyIntfs          physical interfaces
      * @param gatewayBridgeName  gateway bridge name
+     * @param kubernetesExternalLbIntf kubernetesExternalLbIntf
      */
     protected DefaultKubevirtNode(String clusterName, String hostname, Type type,
                                   DeviceId intgBridge, DeviceId tunBridge,
                                   IpAddress managementIp, IpAddress dataIp,
                                   KubevirtNodeState state,
                                   Collection<KubevirtPhyInterface> phyIntfs,
-                                  String gatewayBridgeName) {
+                                  String gatewayBridgeName,
+                                  KubernetesExternalLbInterface kubernetesExternalLbIntf) {
         this.clusterName = clusterName;
         this.hostname = hostname;
         this.type = type;
@@ -88,6 +93,7 @@ public class DefaultKubevirtNode implements KubevirtNode {
         this.state = state;
         this.phyIntfs = phyIntfs;
         this.gatewayBridgeName = gatewayBridgeName;
+        this.kubernetesExternalLbIntf = kubernetesExternalLbIntf;
     }
 
     @Override
@@ -148,6 +154,7 @@ public class DefaultKubevirtNode implements KubevirtNode {
                 .state(newState)
                 .phyIntfs(phyIntfs)
                 .gatewayBridgeName(gatewayBridgeName)
+                .kubernetesExternalLbInterface(kubernetesExternalLbIntf)
                 .build();
     }
 
@@ -164,6 +171,7 @@ public class DefaultKubevirtNode implements KubevirtNode {
                 .state(state)
                 .phyIntfs(phyIntfs)
                 .gatewayBridgeName(gatewayBridgeName)
+                .kubernetesExternalLbInterface(kubernetesExternalLbIntf)
                 .build();
     }
 
@@ -180,6 +188,32 @@ public class DefaultKubevirtNode implements KubevirtNode {
                 .state(state)
                 .phyIntfs(phyIntfs)
                 .gatewayBridgeName(gatewayBridgeName)
+                .kubernetesExternalLbInterface(kubernetesExternalLbIntf)
+                .build();
+    }
+
+    @Override
+    public KubevirtNode updateKubernetesElbIntfGwMac(MacAddress macAddress) {
+
+        KubernetesExternalLbInterface externalLbInterface = DefaultKubernetesExternalLbInterface.builder()
+                .externalLbIp(this.kubernetesExternalLbIntf.externalLbIp())
+                .externalLbBridgeName(this.kubernetesExternalLbIntf.externalLbBridgeName())
+                .externallbGwIp(this.kubernetesExternalLbIntf.externalLbGwIp())
+                .externalLbGwMac(macAddress)
+                .build();
+
+        return new Builder()
+                .hostname(hostname)
+                .clusterName(clusterName)
+                .type(type)
+                .intgBridge(intgBridge)
+                .tunBridge(tunBridge)
+                .managementIp(managementIp)
+                .dataIp(dataIp)
+                .state(state)
+                .phyIntfs(phyIntfs)
+                .gatewayBridgeName(gatewayBridgeName)
+                .kubernetesExternalLbInterface(externalLbInterface)
                 .build();
     }
 
@@ -222,8 +256,18 @@ public class DefaultKubevirtNode implements KubevirtNode {
     }
 
     @Override
+    public PortNumber sttPort() {
+        return tunnelPort(STT);
+    }
+
+    @Override
     public String gatewayBridgeName() {
         return gatewayBridgeName;
+    }
+
+    @Override
+    public KubernetesExternalLbInterface kubernetesExternalLbInterface() {
+        return kubernetesExternalLbIntf;
     }
 
     private PortNumber tunnelPort(String tunnelType) {
@@ -290,7 +334,8 @@ public class DefaultKubevirtNode implements KubevirtNode {
                 .dataIp(node.dataIp())
                 .state(node.state())
                 .phyIntfs(node.phyIntfs())
-                .gatewayBridgeName(node.gatewayBridgeName());
+                .gatewayBridgeName(node.gatewayBridgeName())
+                .kubernetesExternalLbInterface(node.kubernetesExternalLbInterface());
     }
 
     @Override
@@ -330,6 +375,7 @@ public class DefaultKubevirtNode implements KubevirtNode {
                 .add("state", state)
                 .add("phyIntfs", phyIntfs)
                 .add("gatewayBridgeName", gatewayBridgeName)
+                .add("kubernetesExternalLbInterface", kubernetesExternalLbIntf)
                 .toString();
     }
 
@@ -345,6 +391,7 @@ public class DefaultKubevirtNode implements KubevirtNode {
         private KubevirtNodeState state;
         private Collection<KubevirtPhyInterface> phyIntfs;
         private String gatewayBridgeName;
+        private KubernetesExternalLbInterface kubernetesExternalLbInterface;
 
         // private constructor not intended to use from external
         private Builder() {
@@ -371,7 +418,8 @@ public class DefaultKubevirtNode implements KubevirtNode {
                     dataIp,
                     state,
                     phyIntfs,
-                    gatewayBridgeName
+                    gatewayBridgeName,
+                    kubernetesExternalLbInterface
             );
         }
 
@@ -432,6 +480,12 @@ public class DefaultKubevirtNode implements KubevirtNode {
         @Override
         public Builder gatewayBridgeName(String gatewayBridgeName) {
             this.gatewayBridgeName = gatewayBridgeName;
+            return this;
+        }
+
+        @Override
+        public Builder kubernetesExternalLbInterface(KubernetesExternalLbInterface kubernetesExternalLbInterface) {
+            this.kubernetesExternalLbInterface = kubernetesExternalLbInterface;
             return this;
         }
     }

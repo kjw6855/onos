@@ -82,11 +82,13 @@ import static org.onosproject.kubevirtnode.api.Constants.INTEGRATION_BRIDGE;
 import static org.onosproject.kubevirtnode.api.Constants.INTEGRATION_TO_PHYSICAL_PREFIX;
 import static org.onosproject.kubevirtnode.api.Constants.INTEGRATION_TO_TUNNEL;
 import static org.onosproject.kubevirtnode.api.Constants.PHYSICAL_TO_INTEGRATION_SUFFIX;
+import static org.onosproject.kubevirtnode.api.Constants.STT;
 import static org.onosproject.kubevirtnode.api.Constants.TENANT_BRIDGE_PREFIX;
 import static org.onosproject.kubevirtnode.api.Constants.TUNNEL_BRIDGE;
 import static org.onosproject.kubevirtnode.api.Constants.TUNNEL_TO_INTEGRATION;
 import static org.onosproject.kubevirtnode.api.Constants.VXLAN;
 import static org.onosproject.kubevirtnode.api.KubevirtNode.Type.GATEWAY;
+import static org.onosproject.kubevirtnode.api.KubevirtNode.Type.WORKER;
 import static org.onosproject.kubevirtnode.api.KubevirtNodeService.APP_ID;
 import static org.onosproject.kubevirtnode.api.KubevirtNodeState.COMPLETE;
 import static org.onosproject.kubevirtnode.api.KubevirtNodeState.DEVICE_CREATED;
@@ -244,6 +246,10 @@ public class DefaultKubevirtNodeHandler implements KubevirtNodeHandler {
             if (node.dataIp() != null && !isIntfEnabled(node, GENEVE)) {
                 createGeneveTunnelInterface(node);
             }
+
+            if (node.dataIp() != null && !isIntfEnabled(node, STT)) {
+                createSttTunnelInterface(node);
+            }
         } catch (Exception e) {
             log.error("Exception occurred because of {}", e);
         }
@@ -362,6 +368,10 @@ public class DefaultKubevirtNodeHandler implements KubevirtNodeHandler {
         createTunnelInterface(node, GENEVE, GENEVE);
     }
 
+    private void createSttTunnelInterface(KubevirtNode node) {
+        createTunnelInterface(node, STT, STT);
+    }
+
     /**
      * Creates a tunnel interface in a given kubernetes node.
      *
@@ -396,7 +406,7 @@ public class DefaultKubevirtNodeHandler implements KubevirtNodeHandler {
      */
     private TunnelDescription buildTunnelDesc(String type, String intfName) {
         TunnelKey<String> key = new TunnelKey<>(FLOW_KEY);
-        if (VXLAN.equals(type) || GRE.equals(type) || GENEVE.equals(type)) {
+        if (VXLAN.equals(type) || GRE.equals(type) || GENEVE.equals(type) || STT.equals(type)) {
             TunnelDescription.Builder tdBuilder =
                     DefaultTunnelDescription.builder()
                             .deviceId(TUNNEL_BRIDGE)
@@ -413,6 +423,9 @@ public class DefaultKubevirtNodeHandler implements KubevirtNodeHandler {
                     break;
                 case GENEVE:
                     tdBuilder.type(TunnelDescription.Type.GENEVE);
+                    break;
+                case STT:
+                    tdBuilder.type(TunnelDescription.Type.STT);
                     break;
                 default:
                     return null;
@@ -557,6 +570,8 @@ public class DefaultKubevirtNodeHandler implements KubevirtNodeHandler {
             return false;
         }
 
+        // we make the STT tunnel port check optional
+
         for (KubevirtPhyInterface phyIntf : node.phyIntfs()) {
             if (phyIntf == null) {
                 log.warn("Physnet interface is invalid");
@@ -571,18 +586,42 @@ public class DefaultKubevirtNodeHandler implements KubevirtNodeHandler {
                 log.error("Exception caused during init state checking...");
             }
 
-            String bridgeName = BRIDGE_PREFIX + phyIntf.network();
             String patchPortName = structurePortName(
                     INTEGRATION_TO_PHYSICAL_PREFIX + phyIntf.network());
 
-            if (!(hasPhyBridge(node, bridgeName) &&
-                    hasPhyPatchPort(node, patchPortName) &&
-                    hasPhyIntf(node, phyIntf.intf()))) {
-                log.warn("PhyBridge {}", hasPhyBridge(node, bridgeName));
-                log.warn("hasPhyPatchPort {}", hasPhyPatchPort(node, patchPortName));
-                log.warn("hasPhyIntf {}", hasPhyIntf(node, phyIntf.intf()));
-                return false;
+            if (node.type() == WORKER) {
+                String bridgeName = BRIDGE_PREFIX + phyIntf.network();
+                if (!(hasPhyBridge(node, bridgeName) &&
+                        hasPhyPatchPort(node, patchPortName) &&
+                        hasPhyIntf(node, phyIntf.intf()))) {
+                    log.warn("PhyBridge {}", hasPhyBridge(node, bridgeName));
+                    log.warn("hasPhyPatchPort {}", hasPhyPatchPort(node, patchPortName));
+                    log.warn("hasPhyIntf {}", hasPhyIntf(node, phyIntf.intf()));
+                    return false;
+                }
+            } else {
+                //In case node type is GATEWAY, we create physical bridges connected to the contoller.
+                //By doing so, ONOS immediately recognizes the status of physical interface and performs RM procedures.
+                Port phyIntfPort = deviceService.getPorts(phyIntf.physBridge()).stream()
+                        .filter(port -> port.annotations().value(PORT_NAME).equals(phyIntf.intf()))
+                        .findAny().orElse(null);
+                if (phyIntfPort == null) {
+                    log.warn("There's no connected physical port {} on physical device {}",
+                            phyIntf.intf(), phyIntf.physBridge());
+                }
+
+                if (!(deviceService.isAvailable(phyIntf.physBridge()) &&
+                        hasPhyPatchPort(node, patchPortName) &&
+                        hasPhyIntf(node, phyIntf.intf()) &&
+                        phyIntfPort.isEnabled())) {
+                    log.warn("PhysBridge {}", deviceService.isAvailable(phyIntf.physBridge()));
+                    log.warn("hasPhyPatchPort {}", hasPhyPatchPort(node, patchPortName));
+                    log.warn("hasPhyIntf {}", hasPhyIntf(node, phyIntf.intf()));
+                    log.warn("physical interface port {}", phyIntfPort.isEnabled());
+                    return false;
+                }
             }
+
         }
 
         if (node.type() == GATEWAY) {
@@ -596,6 +635,12 @@ public class DefaultKubevirtNodeHandler implements KubevirtNodeHandler {
         return true;
     }
 
+    private boolean hasPhyBridge(KubevirtNode node, String bridgeName) {
+        BridgeConfig bridgeConfig =
+                deviceService.getDevice(node.ovsdb()).as(BridgeConfig.class);
+        return bridgeConfig.getBridges().stream()
+                .anyMatch(br -> br.name().equals(bridgeName));
+    }
     /**
      * Configures the kubernetes node with new state.
      *
@@ -616,14 +661,21 @@ public class DefaultKubevirtNodeHandler implements KubevirtNodeHandler {
             String bridgeName = BRIDGE_PREFIX + pi.network();
             String patchPortName =
                     structurePortName(INTEGRATION_TO_PHYSICAL_PREFIX + pi.network());
-
-            if (!hasPhyBridge(node, bridgeName)) {
+            if (node.type() == WORKER && !hasPhyBridge(node, bridgeName)) {
                 createPhysicalBridge(node, pi);
                 createPhysicalPatchPorts(node, pi);
                 attachPhysicalPort(node, pi);
 
-                log.info("Creating physnet bridge {}", bridgeName);
-                log.info("Creating patch ports for physnet {}", bridgeName);
+                log.info("Creating physnet bridge {} for worker node {}", bridgeName, node.hostname());
+                log.info("Creating patch ports for physnet {} for worker node {}", bridgeName, node.hostname());
+
+            } else if (node.type() == GATEWAY && (!deviceService.isAvailable(pi.physBridge()))) {
+                createPhysicalBridgeWithConnectedMode(node, pi);
+                createPhysicalPatchPorts(node, pi);
+                attachPhysicalPort(node, pi);
+
+                log.info("Creating physnet bridge {} for gateway node {}", bridgeName, node.hostname());
+                log.info("Creating patch ports for physnet {} for gateway node {}", bridgeName, node.hostname());
             } else {
                 // in case physical bridge exists, but patch port is missing,
                 // we will add patch port to connect br-physnet with physical bridge
@@ -714,13 +766,6 @@ public class DefaultKubevirtNodeHandler implements KubevirtNodeHandler {
         });
     }
 
-    private boolean hasPhyBridge(KubevirtNode node, String bridgeName) {
-        BridgeConfig bridgeConfig =
-                deviceService.getDevice(node.ovsdb()).as(BridgeConfig.class);
-        return bridgeConfig.getBridges().stream()
-                .anyMatch(br -> br.name().equals(bridgeName));
-    }
-
     private boolean hasPhyPatchPort(KubevirtNode node, String patchPortName) {
         List<Port> ports = deviceService.getPorts(node.intgBridge());
         return ports.stream().anyMatch(p ->
@@ -743,6 +788,44 @@ public class DefaultKubevirtNodeHandler implements KubevirtNodeHandler {
         BridgeDescription.Builder builder = DefaultBridgeDescription.builder()
                 .name(bridgeName)
                 .mcastSnoopingEnable();
+
+        BridgeConfig bridgeConfig = device.as(BridgeConfig.class);
+        bridgeConfig.addBridge(builder.build());
+    }
+
+    private void createPhysicalBridgeWithConnectedMode(KubevirtNode osNode,
+                                                       KubevirtPhyInterface phyInterface) {
+        Device device = deviceService.getDevice(osNode.ovsdb());
+        IpAddress controllerIp = apiConfigService.apiConfig().controllerIp();
+        String serviceFqdn = apiConfigService.apiConfig().serviceFqdn();
+        IpAddress serviceIp = null;
+
+        if (controllerIp == null) {
+            if (serviceFqdn != null) {
+                serviceIp = resolveHostname(serviceFqdn);
+            }
+
+            if (serviceIp != null) {
+                controllerIp = serviceIp;
+            } else {
+                controllerIp = apiConfigService.apiConfig().ipAddress();
+            }
+        }
+
+        ControllerInfo controlInfo = new ControllerInfo(controllerIp, DEFAULT_OFPORT, DEFAULT_OF_PROTO);
+        List<ControllerInfo> controllers = Lists.newArrayList(controlInfo);
+
+        String dpid = phyInterface.physBridge().toString().substring(DPID_BEGIN);
+
+        String bridgeName = BRIDGE_PREFIX + phyInterface.network();
+
+        BridgeDescription.Builder builder = DefaultBridgeDescription.builder()
+                .name(bridgeName)
+                .failMode(BridgeDescription.FailMode.SECURE)
+                .datapathId(dpid)
+                .mcastSnoopingEnable()
+                .disableInBand()
+                .controllers(controllers);
 
         BridgeConfig bridgeConfig = device.as(BridgeConfig.class);
         bridgeConfig.addBridge(builder.build());
@@ -829,6 +912,17 @@ public class DefaultKubevirtNodeHandler implements KubevirtNodeHandler {
         addOrRemoveSystemInterface(node, physicalDeviceId, portName, deviceService, false);
     }
 
+    private KubevirtNode nodeByTunOrPhyBridge(DeviceId deviceId) {
+        KubevirtNode node = nodeAdminService.nodeByTunBridge(deviceId);
+        if (node == null) {
+            node = nodeAdminService.nodeByPhyBridge(deviceId);
+            if (node == null) {
+                return null;
+            }
+        }
+        return node;
+    }
+
     /**
      * An internal OVSDB listener. This listener is used for listening the
      * network facing events from OVSDB device. If a new OVSDB device is detected,
@@ -909,7 +1003,7 @@ public class DefaultKubevirtNodeHandler implements KubevirtNodeHandler {
                     break;
                 case PORT_UPDATED:
                 case PORT_ADDED:
-                    eventExecutor.execute(() -> processPortAddition(device, port));
+                    eventExecutor.execute(() -> processPortAdditionOrUpdate(device, port));
                     break;
                 case PORT_REMOVED:
                     eventExecutor.execute(() -> processPortRemoval(device, port));
@@ -948,12 +1042,12 @@ public class DefaultKubevirtNodeHandler implements KubevirtNodeHandler {
             }
         }
 
-        void processPortAddition(Device device, Port port) {
+        void processPortAdditionOrUpdate(Device device, Port port) {
             if (!isRelevantHelper()) {
                 return;
             }
 
-            KubevirtNode node = nodeAdminService.nodeByTunBridge(device.id());
+            KubevirtNode node = nodeByTunOrPhyBridge(device.id());
 
             if (node == null) {
                 return;
@@ -963,10 +1057,35 @@ public class DefaultKubevirtNodeHandler implements KubevirtNodeHandler {
             if (node.state() == DEVICE_CREATED && (
                     Objects.equals(portName, VXLAN) ||
                             Objects.equals(portName, GRE) ||
-                            Objects.equals(portName, GENEVE))) {
+                            Objects.equals(portName, GENEVE) ||
+                            Objects.equals(portName, STT))) {
                 log.info("Interface {} added or updated to {}",
                         portName, device.id());
                 bootstrapNode(node);
+            }
+
+            //When the physical port is down, in the middle of normal operation, we set the node state to INCOMPLTE
+            //so that respective handlers do their related jobs.
+            if (node.state() == COMPLETE && node.type().equals(GATEWAY) && !port.isEnabled()) {
+                node.phyIntfs().stream()
+                        .filter(pi -> pi.intf().equals(portName))
+                        .findAny()
+                        .ifPresent(pi -> {
+                            log.info("Interface {} is down so set node {}'s state to INCOMPLETE",
+                                    pi.intf(),
+                                    node.hostname());
+                            setState(node, INCOMPLETE);
+                        });
+            }
+
+            //When the physical port up again, we set the node state to INIT
+            //so that respective handlers do their related jobs.
+            if ((node.state() == INCOMPLETE || node.state() == DEVICE_CREATED)
+                    && node.type().equals(GATEWAY) && port.isEnabled()) {
+                node.phyIntfs().stream()
+                        .filter(pi -> pi.intf().equals(portName))
+                        .findAny()
+                        .ifPresent(pi -> setState(node, INIT));
             }
         }
 
@@ -985,7 +1104,8 @@ public class DefaultKubevirtNodeHandler implements KubevirtNodeHandler {
             if (node.state() == COMPLETE && (
                     Objects.equals(portName, VXLAN) ||
                             Objects.equals(portName, GRE) ||
-                            Objects.equals(portName, GENEVE))) {
+                            Objects.equals(portName, GENEVE) ||
+                            Objects.equals(portName, STT))) {
                 log.warn("Interface {} removed from {}", portName, device.id());
                 setState(node, INCOMPLETE);
             }

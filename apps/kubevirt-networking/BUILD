@@ -1,10 +1,7 @@
 BUNDLES = [
-    "//apps/kubevirt-networking/api:onos-apps-kubevirt-networking-api",
-    "//apps/kubevirt-networking/app:onos-apps-kubevirt-networking-app",
+    "@minimal_json//jar",
     "@commons_net//jar",
     "@ipaddress//jar",
-    "@jersey_client//jar",
-    "@json//jar",
     "@k8s_client//jar",
     "@k8s_model//jar",
     "@k8s_model_common//jar",
@@ -17,6 +14,7 @@ BUNDLES = [
     "@k8s_model_certificates//jar",
     "@k8s_model_coordination//jar",
     "@k8s_model_discovery//jar",
+    "@k8s_model_flowcontrol//jar",
     "@k8s_model_metrics//jar",
     "@k8s_model_scheduling//jar",
     "@k8s_model_storageclass//jar",
@@ -35,6 +33,18 @@ BUNDLES = [
     "@zjsonpatch//jar",
     "@validation_api//jar",
     "@dns_java//jar",
+    "//apps/kubevirt-networking/api:onos-apps-kubevirt-networking-api",
+    "//apps/kubevirt-networking/app:onos-apps-kubevirt-networking-app",
+    "//apps/kubevirt-networking/web:onos-apps-kubevirt-networking-web",
+    # prometheus deps
+    "@simpleclient//jar",
+    "@simpleclient_common//jar",
+    "@simpleclient_hotspot//jar",
+    "@simpleclient_servlet//jar",
+    "@jetty_servlet//jar",
+    "@jetty_server//jar",
+    "@jetty_util//jar",
+    "@jetty_websocket//jar",
 ]
 
 onos_app(

@@ -16,6 +16,7 @@
 package org.onosproject.kubevirtnode.api;
 
 import org.onlab.packet.IpAddress;
+import org.onlab.packet.MacAddress;
 import org.onosproject.net.DeviceId;
 import org.onosproject.net.PortNumber;
 
@@ -140,6 +141,13 @@ public interface KubevirtNode {
     KubevirtNode updateTunBridge(DeviceId deviceId);
 
     /**
+     * Returns new kubevirt node instance with given kubernetes external lb intf gw mac.
+     * @param macAddress kubernetes external lb intf gw mac
+     * @return updated kubevirt node
+     */
+    KubevirtNode updateKubernetesElbIntfGwMac(MacAddress macAddress);
+
+    /**
      * Returns a collection of physical interfaces.
      *
      * @return physical interfaces
@@ -175,11 +183,25 @@ public interface KubevirtNode {
     PortNumber genevePort();
 
     /**
+     * Returns the STT tunnel port number.
+     *
+     * @return STT port number; null if the STT tunnel port does not exist
+     */
+    PortNumber sttPort();
+
+    /**
      * Returns the name of the gateway bridge.
      *
      * @return gateway bridge name
      */
     String gatewayBridgeName();
+
+    /**
+     *  Returns the kubernetesExternalLbInterface.
+     *
+     * @return kubernetesExternalLbInterface
+     */
+    KubernetesExternalLbInterface kubernetesExternalLbInterface();
 
     /**
      * Builder of new node entity.
@@ -271,5 +293,14 @@ public interface KubevirtNode {
          * @return kubevirt node builder
          */
         KubevirtNode.Builder gatewayBridgeName(String gatewayBridgeName);
+
+
+        /**
+         * Returns kubevirt node builder with supplied supplied kubernetesExternalLbInterface.
+         *
+         * @param kubernetesExternalLbInterface kubernetesExternalLbInterface
+         * @return kubevirt node builder
+         */
+        KubevirtNode.Builder kubernetesExternalLbInterface(KubernetesExternalLbInterface kubernetesExternalLbInterface);
     }
 }

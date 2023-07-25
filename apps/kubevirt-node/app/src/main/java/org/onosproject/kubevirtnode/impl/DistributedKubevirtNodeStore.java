@@ -19,8 +19,10 @@ import com.google.common.collect.ImmutableSet;
 import org.onlab.util.KryoNamespace;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.core.CoreService;
+import org.onosproject.kubevirtnode.api.DefaultKubernetesExternalLbInterface;
 import org.onosproject.kubevirtnode.api.DefaultKubevirtNode;
 import org.onosproject.kubevirtnode.api.DefaultKubevirtPhyInterface;
+import org.onosproject.kubevirtnode.api.KubernetesExternalLbInterface;
 import org.onosproject.kubevirtnode.api.KubevirtNode;
 import org.onosproject.kubevirtnode.api.KubevirtNodeEvent;
 import org.onosproject.kubevirtnode.api.KubevirtNodeState;
@@ -77,6 +79,8 @@ public class DistributedKubevirtNodeStore
             .register(DefaultKubevirtNode.class)
             .register(KubevirtPhyInterface.class)
             .register(DefaultKubevirtPhyInterface.class)
+            .register(KubernetesExternalLbInterface.class)
+            .register(DefaultKubernetesExternalLbInterface.class)
             .register(KubevirtNode.Type.class)
             .register(KubevirtNodeState.class)
             .register(Collection.class)

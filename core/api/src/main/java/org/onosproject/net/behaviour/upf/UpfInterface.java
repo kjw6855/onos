@@ -16,6 +16,7 @@
 
 package org.onosproject.net.behaviour.upf;
 
+import com.google.common.annotations.Beta;
 import org.onlab.packet.Ip4Address;
 import org.onlab.packet.Ip4Prefix;
 
@@ -24,15 +25,19 @@ import java.util.Objects;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
- * A UPF device interface, such as a S1U or UE IP address pool.
+ * A UPF device interface, such as a N3, or UE IP address pool (N6).
  */
-public final class UpfInterface {
+@Beta
+public final class UpfInterface implements UpfEntity {
     private final Ip4Prefix prefix;
     private final Type type;
+    // TODO: move to SliceId object when slice APIs will be promoted to ONOS core.
+    private final int sliceId;
 
-    private UpfInterface(Ip4Prefix prefix, Type type) {
+    private UpfInterface(Ip4Prefix prefix, Type type, int sliceId) {
         this.prefix = prefix;
         this.type = type;
+        this.sliceId = sliceId;
     }
 
     public static Builder builder() {
@@ -41,17 +46,7 @@ public final class UpfInterface {
 
     @Override
     public String toString() {
-        String typeStr;
-        if (type.equals(Type.ACCESS)) {
-            typeStr = "Access";
-        } else if (type.equals(Type.CORE)) {
-            typeStr = "Core";
-        } else if (type.equals(Type.DBUF)) {
-            typeStr = "Dbuf-Receiver";
-        } else {
-            typeStr = "UNKNOWN";
-        }
-        return String.format("Interface{%s, %s}", typeStr, prefix);
+        return String.format("UpfInterface(type=%s, prefix=%s, slice_id=%s)", type.toString(), prefix, sliceId);
     }
 
     @Override
@@ -66,43 +61,59 @@ public final class UpfInterface {
             return false;
         }
         UpfInterface that = (UpfInterface) obj;
-        return (this.type.equals(that.type) &&
-                this.prefix.equals(that.prefix));
+        return this.type.equals(that.type) &&
+                this.prefix.equals(that.prefix) &&
+                this.sliceId == that.sliceId;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(prefix, type);
+        return Objects.hash(prefix, type, sliceId);
     }
 
     /**
-     * Create a core-facing UPF Interface from the given address, which will be treated as a /32 prefix.
+     * Create access-facing UPF Interface (N3) from the given address, which will be treated as a /32 prefix.
      *
-     * @param address the address of the new core-facing interface
+     * @param address the address of the new access-facing interface (N3 interface)
+     * @param sliceId the slice id of the new interface
      * @return a new UPF interface
      */
-    public static UpfInterface createS1uFrom(Ip4Address address) {
-        return builder().setAccess().setPrefix(Ip4Prefix.valueOf(address, 32)).build();
+    public static UpfInterface createN3From(Ip4Address address, int sliceId) {
+        return builder()
+                .setAccess()
+                .setPrefix(Ip4Prefix.valueOf(address, 32))
+                .setSliceId(sliceId)
+                .build();
     }
 
     /**
-     * Create a core-facing UPF Interface from the given IP prefix.
+     * Create a core-facing UPF Interface (N6) from the given IP prefix.
      *
-     * @param prefix the prefix of the new core-facing interface
+     * @param prefix the prefix of the new core-facing interface (N6 interface)
+     * @param sliceId the slice id of the new interface
      * @return a new UPF interface
      */
-    public static UpfInterface createUePoolFrom(Ip4Prefix prefix) {
-        return builder().setCore().setPrefix(prefix).build();
+    public static UpfInterface createUePoolFrom(Ip4Prefix prefix, int sliceId) {
+        return builder()
+                .setCore()
+                .setPrefix(prefix)
+                .setSliceId(sliceId)
+                .build();
     }
 
     /**
      * Create a dbuf-receiving UPF interface from the given IP address.
      *
      * @param address the address of the dbuf-receiving interface
+     * @param sliceId the slice id of the new interface
      * @return a new UPF interface
      */
-    public static UpfInterface createDbufReceiverFrom(Ip4Address address) {
-        return UpfInterface.builder().setDbufReceiver().setAddress(address).build();
+    public static UpfInterface createDbufReceiverFrom(Ip4Address address, int sliceId) {
+        return builder()
+                .setDbufReceiver()
+                .setAddress(address)
+                .setSliceId(sliceId)
+                .build();
     }
 
     /**
@@ -115,8 +126,17 @@ public final class UpfInterface {
     }
 
     /**
+     * Get the slice ID of this interface.
+     *
+     * @return the slice ID
+     */
+    public int sliceId() {
+        return sliceId;
+    }
+
+    /**
      * Check if this UPF interface is for packets traveling from UEs.
-     * This will be true for S1U interface table entries.
+     * This will be true for N3 interface table entries.
      *
      * @return true if interface receives from access
      */
@@ -133,7 +153,6 @@ public final class UpfInterface {
     public boolean isCore() {
         return type == Type.CORE;
     }
-
 
     /**
      * Check if this UPF interface is for receiving buffered packets as they are released from the dbuf
@@ -154,6 +173,11 @@ public final class UpfInterface {
         return this.prefix;
     }
 
+    @Override
+    public UpfEntityType type() {
+        return UpfEntityType.INTERFACE;
+    }
+
     public enum Type {
         /**
          * Unknown UPF interface type.
@@ -162,13 +186,13 @@ public final class UpfInterface {
 
         /**
          * Interface that receives GTP encapsulated packets.
-         * This is the type of the S1U interface.
+         * This is the type of the N3 interface.
          */
         ACCESS,
 
         /**
          * Interface that receives unencapsulated packets from the core of the network.
-         * This is the type of UE IP address pool interfaces.
+         * This is the type of UE IP address pool interfaces (N6).
          */
         CORE,
 
@@ -181,6 +205,7 @@ public final class UpfInterface {
     public static class Builder {
         private Ip4Prefix prefix;
         private Type type;
+        private Integer sliceId;
 
         public Builder() {
             type = Type.UNKNOWN;
@@ -198,6 +223,17 @@ public final class UpfInterface {
         }
 
         /**
+         * Set the slice ID of this interface.
+         *
+         * @param sliceId the slice ID
+         * @return this builder object
+         */
+        public Builder setSliceId(int sliceId) {
+            this.sliceId = sliceId;
+            return this;
+        }
+
+        /**
          * Set the IPv4 prefix of this interface, by turning the given address into a /32 prefix.
          *
          * @param address the interface address that will become a /32 prefix
@@ -209,7 +245,7 @@ public final class UpfInterface {
         }
 
         /**
-         * Make this an access-facing interface.
+         * Make this an access-facing interface (N3).
          *
          * @return this builder object
          */
@@ -219,7 +255,7 @@ public final class UpfInterface {
         }
 
         /**
-         * Make this a core-facing interface.
+         * Make this a core-facing interface (N6).
          *
          * @return this builder object
          */
@@ -239,8 +275,9 @@ public final class UpfInterface {
         }
 
         public UpfInterface build() {
-            checkNotNull(prefix);
-            return new UpfInterface(prefix, type);
+            checkNotNull(prefix, "The IPv4 prefix must be provided");
+            checkNotNull(sliceId, "Slice ID must be provided");
+            return new UpfInterface(prefix, type, sliceId);
         }
     }
 }

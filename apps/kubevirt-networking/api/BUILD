@@ -12,6 +12,7 @@ COMPILE_DEPS = CORE_DEPS + [
     "@k8s_model_certificates//jar",
     "@k8s_model_coordination//jar",
     "@k8s_model_discovery//jar",
+    "@k8s_model_flowcontrol//jar",
     "@k8s_model_metrics//jar",
     "@k8s_model_scheduling//jar",
     "@k8s_model_storageclass//jar",
@@ -30,6 +31,8 @@ COMPILE_DEPS = CORE_DEPS + [
     "@jackson_datatype_jsr310//jar",
     "@snakeyaml//jar",
     "@commons_net//jar",
+    "@jersey_client//jar",
+    "@javax_ws_rs_api//jar",
 ]
 
 TEST_DEPS = TEST_ADAPTERS + [

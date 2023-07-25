@@ -5,5 +5,11 @@
   "dataIp": "172.16.130.4",
   "integrationBridge": "of:00000000000000a1",
   "tunnelBridge": "of:00000000000000a2",
-  "gatewayBridgeName": "gateway"
+  "gatewayBridgeName": "gateway",
+  "kubernetesExternalLbInterface": {
+    "externalLbBridgeName": "elbnet",
+    "externalLbIp": "10.10.10.2",
+    "externalLbGwIp": "10.10.10.1",
+    "externalLbGwMac": "aa:bb:cc:dd:ee:ff"
+  }
 }

@@ -18,6 +18,7 @@ package org.onosproject.kubevirtnetworking.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.google.common.collect.ImmutableMap;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.kubernetes.client.WatcherException;
@@ -215,7 +216,10 @@ public class KubevirtVmWatcher {
 
         @Override
         public void onClose(WatcherException e) {
-            log.warn("VM watcher OnClose, re-instantiate the VM watcher...");
+            // due to the bugs in fabric8, the watcher might be closed,
+            // we will re-instantiate the watcher in this case
+            // FIXME: https://github.com/fabric8io/kubernetes-client/issues/2135
+            log.info("VM watcher OnClose, re-instantiate the VM watcher...");
             instantiateWatcher();
         }
 
@@ -262,17 +266,23 @@ public class KubevirtVmWatcher {
                         .build();
 
                 KubevirtPort existing = portAdminService.port(port.macAddress());
-
-                if (existing == null) {
-                    return;
-                }
-
                 Set<String> sgs = parseSecurityGroups(resource);
 
-                // we only update the port, if the newly updated security groups
-                // have different values compared to existing ones
-                if (!port.securityGroups().equals(sgs)) {
-                    portAdminService.updatePort(existing.updateSecurityGroups(sgs));
+                if (existing == null) {
+                    // if the network related information is filled with VM update event,
+                    // and there is no port found in the store
+                    // we try to add port by extracting network related info from VM
+                    port = port.updateSecurityGroups(sgs);
+                    Map<String, IpAddress> ips = parseIpAddresses(resource);
+                    IpAddress ip = ips.get(port.networkId());
+                    port = port.updateIpAddress(ip);
+                    portAdminService.createPort(port);
+                } else {
+                    // we only update the port, if the newly updated security groups
+                    // have different values compared to existing ones
+                    if (!port.securityGroups().equals(sgs)) {
+                        portAdminService.updatePort(existing.updateSecurityGroups(sgs));
+                    }
                 }
             });
         }
@@ -382,6 +392,10 @@ public class KubevirtVmWatcher {
                 JsonNode spec = json.get(SPEC).get(TEMPLATE).get(SPEC);
                 ArrayNode interfaces = (ArrayNode) spec.get(DOMAIN).get(DEVICES).get(INTERFACES);
 
+                // if the VM is not associated with any network, we skip parsing MAC address
+                if (interfaces == null) {
+                    return ImmutableMap.of();
+                }
                 Map<MacAddress, String> result = new HashMap<>();
                 for (JsonNode intf : interfaces) {
                     String network = intf.get(NAME).asText();

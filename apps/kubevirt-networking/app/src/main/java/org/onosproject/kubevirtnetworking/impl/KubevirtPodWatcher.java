@@ -164,7 +164,7 @@ public class KubevirtPodWatcher {
             // due to the bugs in fabric8, pod watcher might be closed,
             // we will re-instantiate the pod watcher in this case
             // FIXME: https://github.com/fabric8io/kubernetes-client/issues/2135
-            log.warn("Pod watcher OnClose, re-instantiate the POD watcher...");
+            log.info("Pod watcher OnClose, re-instantiate the POD watcher...");
             instantiatePodWatcher();
         }
 

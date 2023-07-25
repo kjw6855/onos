@@ -5,8 +5,7 @@ COMPILE_DEPS = CORE_DEPS + JACKSON + KRYO + CLI + REST + [
     "//apps/kubevirt-node/api:onos-apps-kubevirt-node-api",
     "//apps/kubevirt-networking/api:onos-apps-kubevirt-networking-api",
     "@commons_net//jar",
-    "@jersey_client//jar",
-    "@json//jar",
+    "@minimal_json//jar",
     "@k8s_client//jar",
     "@k8s_model//jar",
     "@k8s_model_common//jar",
@@ -19,6 +18,7 @@ COMPILE_DEPS = CORE_DEPS + JACKSON + KRYO + CLI + REST + [
     "@k8s_model_certificates//jar",
     "@k8s_model_coordination//jar",
     "@k8s_model_discovery//jar",
+    "@k8s_model_flowcontrol//jar",
     "@k8s_model_metrics//jar",
     "@k8s_model_scheduling//jar",
     "@k8s_model_storageclass//jar",
@@ -37,22 +37,25 @@ COMPILE_DEPS = CORE_DEPS + JACKSON + KRYO + CLI + REST + [
     "@zjsonpatch//jar",
     "@validation_api//jar",
     "@dns_java//jar",
+    "@simpleclient//jar",
+    "@simpleclient_common//jar",
+    "@simpleclient_hotspot//jar",
+    "@simpleclient_servlet//jar",
+    "@jetty_servlet//jar",
+    "@jetty_http//jar",
+    "@jetty_server//jar",
+    "@jetty_util//jar",
+    "@jetty_websocket//jar",
+    "@servlet_api//jar",
 ]
 
-TEST_DEPS = TEST_ADAPTERS + TEST_REST + [
+TEST_DEPS = TEST_ADAPTERS + [
     "//core/api:onos-api-tests",
     "//core/common:onos-core-common-tests",
-    "//web/api:onos-rest-tests",
-    "@minimal_json//jar",
 ]
 
 osgi_jar_with_tests(
-    api_description = "REST API for KubeVirt Networking",
-    api_package = "org.onosproject.kubevirtnetworking.web",
-    api_title = "KubeVirt Networking API",
-    api_version = "1.0",
     karaf_command_packages = ["org.onosproject.kubevirtnetworking.cli"],
     test_deps = TEST_DEPS,
-    web_context = "/onos/kubevirtnetworking",
     deps = COMPILE_DEPS,
 )

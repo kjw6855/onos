@@ -181,12 +181,21 @@ public final class StreamClientImpl implements P4RuntimeStreamClient {
                         ARBITRATION_RETRY_SECONDS, TimeUnit.SECONDS);
             } else {
                 // Send now.
-                log.info("Setting mastership on {}... " +
-                                 "master={}, newElectionId={}, " +
-                                 "masterElectionId={}, sessionOpen={}",
-                         deviceId, requestedToBeMaster.get(),
-                         pendingElectionId, masterElectionId,
-                         streamChannelManager.isOpen());
+                if (log.isDebugEnabled()) {
+                    log.debug("Setting mastership on {}... " +
+                                    "master={}, newElectionId={}, " +
+                                    "masterElectionId={}, sessionOpen={}",
+                            deviceId, requestedToBeMaster.get(),
+                            pendingElectionId, masterElectionId,
+                            streamChannelManager.isOpen());
+                } else if (!pendingElectionId.equals(lastUsedElectionId)) {
+                    log.info("Setting mastership on {}... " +
+                                    "master={}, newElectionId={}, " +
+                                    "masterElectionId={}, sessionOpen={}",
+                            deviceId, requestedToBeMaster.get(),
+                            pendingElectionId, masterElectionId,
+                            streamChannelManager.isOpen());
+                }
                 // Optimistically set the reported master status, if wrong, it
                 // will be updated by the arbitration response. This alleviates
                 // race conditions when calling isMaster() right after setting
@@ -444,6 +453,12 @@ public final class StreamClientImpl implements P4RuntimeStreamClient {
                         return;
                     case ARBITRATION:
                         handleArbitrationUpdate(message.getArbitration());
+                        return;
+                    case ERROR:
+                        P4RuntimeOuterClass.StreamError error = message.getError();
+                        log.warn("Receive stream error {} from {} Canonical Code: {} Message: {} Space: {} Code: {}",
+                                error.getDetailsCase(), deviceId, error.getCanonicalCode(), error.getMessage(),
+                                error.getSpace(), error.getCode());
                         return;
                     default:
                         log.warn("Unrecognized StreamMessageResponse from {}: {}",

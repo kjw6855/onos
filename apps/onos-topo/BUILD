@@ -9,6 +9,6 @@ onos_app(
     required_apps = [
         "org.onosproject.protocols.grpc",
     ],
-    title = "µONOS Integration",
+    title = "uONOS Integration",
     url = "http://onosproject.org",
 )

@@ -73,6 +73,7 @@ import static org.onosproject.pipelines.basic.BasicConstants.INGRESS_WCMP_CONTRO
 import static org.onosproject.pipelines.basic.BasicConstants.INGRESS_WCMP_CONTROL_WCMP_TABLE;
 import static org.onosproject.pipelines.basic.BasicConstants.NO_ACTION;
 import static org.onosproject.pipelines.basic.BasicConstants.PORT;
+import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  * Interpreter implementation for basic.p4.

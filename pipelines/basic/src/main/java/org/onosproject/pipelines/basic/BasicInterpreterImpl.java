@@ -41,6 +41,7 @@ import org.onosproject.net.pi.runtime.PiAction;
 import org.onosproject.net.pi.runtime.PiActionParam;
 import org.onosproject.net.pi.runtime.PiPacketMetadata;
 import org.onosproject.net.pi.runtime.PiPacketOperation;
+import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
@@ -79,6 +80,7 @@ import static org.onosproject.pipelines.basic.BasicConstants.PORT;
 public class BasicInterpreterImpl extends AbstractHandlerBehaviour
         implements PiPipelineInterpreter {
 
+    private final Logger log = getLogger(getClass());
     private static final int PORT_BITWIDTH = 9;
 
     private static final Map<Integer, PiTableId> TABLE_MAP =
@@ -118,6 +120,7 @@ public class BasicInterpreterImpl extends AbstractHandlerBehaviour
                             "Output instruction not supported in table " + piTableId);
                 }
             case NOACTION:
+                // FIXME: ONOS-P4 bug (default action could be different)
                 return PiAction.builder().withId(NO_ACTION).build();
             default:
                 throw new PiInterpreterException(format(
@@ -200,6 +203,9 @@ public class BasicInterpreterImpl extends AbstractHandlerBehaviour
             ImmutableByteSequence portByteSequence = packetMetadata.get().value();
             short s = portByteSequence.asReadOnlyBuffer().getShort();
             ConnectPoint receivedFrom = new ConnectPoint(deviceId, PortNumber.portNumber(s));
+            if (!receivedFrom.port().hasName()) {
+                receivedFrom = translateSwitchPort(receivedFrom);
+            }
             ByteBuffer rawData = ByteBuffer.wrap(packetIn.data().asArray());
             return new DefaultInboundPacket(receivedFrom, ethPkt, rawData);
         } else {
@@ -239,5 +245,20 @@ public class BasicInterpreterImpl extends AbstractHandlerBehaviour
     @Override
     public Optional<PiTableId> mapFlowRuleTableId(int flowRuleTableId) {
         return Optional.ofNullable(TABLE_MAP.get(flowRuleTableId));
+    }
+
+    /* Connect point generated using sb metadata does not have port name
+       we use the device service as translation service */
+    private ConnectPoint translateSwitchPort(ConnectPoint connectPoint) {
+        final DeviceService deviceService = handler().get(DeviceService.class);
+        if (deviceService == null) {
+            log.warn("Unable to translate switch port due to DeviceService not available");
+            return connectPoint;
+        }
+        Port devicePort = deviceService.getPort(connectPoint);
+        if (devicePort != null) {
+            return new ConnectPoint(connectPoint.deviceId(), devicePort.number());
+        }
+        return connectPoint;
     }
 }

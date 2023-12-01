@@ -31,6 +31,8 @@ import static org.onlab.junit.ImmutableClassChecker.assertThatClassIsImmutable;
  */
 public class DefaultKubevirtLoadBalancerTest {
 
+    private static final String ID_1 = "26fcc876-f39a-459f-801d-75dcd3654ab8";
+    private static final String ID_2 = "1c14194b-04ca-4c79-b0c7-2d8bb964133f";
     private static final String NAME_1 = "lb-1";
     private static final String NAME_2 = "lb-2";
     private static final String DESCRIPTION_1 = "dummy lb 1";
@@ -84,6 +86,7 @@ public class DefaultKubevirtLoadBalancerTest {
     @Before
     public void setUp() {
         lb1 = DefaultKubevirtLoadBalancer.builder()
+                .id(ID_1)
                 .name(NAME_1)
                 .description(DESCRIPTION_1)
                 .networkId(NETWORK_ID_1)
@@ -93,6 +96,7 @@ public class DefaultKubevirtLoadBalancerTest {
                 .build();
 
         sameAsLb1 = DefaultKubevirtLoadBalancer.builder()
+                .id(ID_1)
                 .name(NAME_1)
                 .description(DESCRIPTION_1)
                 .networkId(NETWORK_ID_1)
@@ -102,6 +106,7 @@ public class DefaultKubevirtLoadBalancerTest {
                 .build();
 
         lb2 = DefaultKubevirtLoadBalancer.builder()
+                .id(ID_2)
                 .name(NAME_2)
                 .description(DESCRIPTION_2)
                 .networkId(NETWORK_ID_2)
@@ -128,6 +133,7 @@ public class DefaultKubevirtLoadBalancerTest {
     public void testConstruction() {
         KubevirtLoadBalancer lb = lb1;
 
+        assertEquals(ID_1, lb.id());
         assertEquals(NAME_1, lb.name());
         assertEquals(DESCRIPTION_1, lb.description());
         assertEquals(NETWORK_ID_1, lb.networkId());

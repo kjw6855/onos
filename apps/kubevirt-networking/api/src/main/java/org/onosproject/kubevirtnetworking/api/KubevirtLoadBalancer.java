@@ -25,6 +25,13 @@ import java.util.Set;
 public interface KubevirtLoadBalancer {
 
     /**
+     * Returns the load balancer id.
+     *
+     * @return load balancer id
+     */
+    String id();
+
+    /**
      * Returns the load balancer name.
      *
      * @return load balancer name
@@ -76,6 +83,14 @@ public interface KubevirtLoadBalancer {
          * @return kubevirt load balancer
          */
         KubevirtLoadBalancer build();
+
+        /**
+         * Returns kubevirt load balancer builder with supplied load balancer id.
+         *
+         * @param id load balancer id
+         * @return load balancer builder
+         */
+        Builder id(String id);
 
         /**
          * Returns kubevirt load balancer builder with supplied load balancer name.

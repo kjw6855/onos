@@ -139,7 +139,7 @@ public class KubevirtRouterWatcher extends AbstractWatcher {
             JsonNode json = mapper.readTree(resource);
             ObjectNode spec = (ObjectNode) json.get("spec");
             KubevirtRouter router = codec(KubevirtRouter.class).decode(spec, this);
-            KubevirtRouter existing = routerService.router(router.name());
+            KubevirtRouter existing = routerService.router(router.id());
 
             if (existing == null) {
                 return router;
@@ -221,14 +221,14 @@ public class KubevirtRouterWatcher extends AbstractWatcher {
                 return;
             }
 
-            String name = parseResourceName(resource);
+            String id = parseResourceName(resource);
 
             log.trace("Process Virtual Router {} creating event from API server.",
-                    name);
+                    id);
 
             KubevirtRouter router = parseKubevirtRouter(resource);
             if (router != null) {
-                if (adminService.router(router.name()) == null) {
+                if (adminService.router(router.id()) == null) {
                     adminService.createRouter(router);
                 }
             }
@@ -239,14 +239,14 @@ public class KubevirtRouterWatcher extends AbstractWatcher {
                 return;
             }
 
-            String name = parseResourceName(resource);
+            String id = parseResourceName(resource);
 
             log.trace("Process Virtual Router {} updating event from API server.",
-                    name);
+                    id);
 
             KubevirtRouter router = parseKubevirtRouter(resource);
 
-            KubevirtPeerRouter oldPeerRouter = adminService.router(router.name()).peerRouter();
+            KubevirtPeerRouter oldPeerRouter = adminService.router(router.id()).peerRouter();
             if (oldPeerRouter != null
                     && Objects.equals(oldPeerRouter.ipAddress(), router.peerRouter().ipAddress())
                     && oldPeerRouter.macAddress() != null
@@ -265,12 +265,12 @@ public class KubevirtRouterWatcher extends AbstractWatcher {
                 return;
             }
 
-            String name = parseResourceName(resource);
+            String id = parseResourceName(resource);
 
             log.trace("Process Virtual Router {} removal event from API server.",
-                    name);
+                    id);
 
-            adminService.removeRouter(name);
+            adminService.removeRouter(id);
         }
 
         private boolean isMaster() {

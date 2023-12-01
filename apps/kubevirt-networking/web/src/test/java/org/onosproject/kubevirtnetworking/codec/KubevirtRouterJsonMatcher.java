@@ -28,6 +28,8 @@ import org.onosproject.kubevirtnetworking.api.KubevirtRouter;
 public final class KubevirtRouterJsonMatcher extends TypeSafeDiagnosingMatcher<JsonNode> {
 
     private final KubevirtRouter router;
+
+    private static final String ID = "id";
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
     private static final String ENABLE_SNAT = "enableSnat";
@@ -44,6 +46,13 @@ public final class KubevirtRouterJsonMatcher extends TypeSafeDiagnosingMatcher<J
 
     @Override
     protected boolean matchesSafely(JsonNode jsonNode, Description description) {
+        // check ID
+        String jsonId = jsonNode.get(ID).asText();
+        String id = router.id();
+        if (!jsonId.equals(id)) {
+            description.appendText("ID was " + jsonId);
+            return false;
+        }
 
         // check name
         String jsonName = jsonNode.get(NAME).asText();

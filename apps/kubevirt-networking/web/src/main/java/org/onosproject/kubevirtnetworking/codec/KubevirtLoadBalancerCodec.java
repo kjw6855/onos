@@ -38,6 +38,7 @@ public final class KubevirtLoadBalancerCodec extends JsonCodec<KubevirtLoadBalan
 
     private final Logger log = getLogger(getClass());
 
+    private static final String ID = "id";
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
     private static final String VIP = "vip";
@@ -52,7 +53,8 @@ public final class KubevirtLoadBalancerCodec extends JsonCodec<KubevirtLoadBalan
         checkNotNull(lb, "Kubevirt load balancer cannot be null");
 
         ObjectNode result = context.mapper().createObjectNode()
-                .put(NAME, lb.name())
+                .put(ID, lb.id())
+                .put(NAME, lb.id())
                 .put(VIP, lb.vip().toString())
                 .put(NETWORK_ID, lb.networkId());
 
@@ -87,13 +89,15 @@ public final class KubevirtLoadBalancerCodec extends JsonCodec<KubevirtLoadBalan
             return null;
         }
 
-        String name = nullIsIllegal(json.get(NAME).asText(), NAME + MISSING_MESSAGE);
+        String id = nullIsIllegal(json.get(ID).asText(), ID + MISSING_MESSAGE);
+        String name = nullIsIllegal(json.get(ID).asText(), NAME + MISSING_MESSAGE);
         IpAddress vip = IpAddress.valueOf(nullIsIllegal(json.get(VIP).asText(),
                 VIP + MISSING_MESSAGE));
         String networkId = nullIsIllegal(json.get(NETWORK_ID).asText(),
                 NETWORK_ID + MISSING_MESSAGE);
 
         KubevirtLoadBalancer.Builder builder = DefaultKubevirtLoadBalancer.builder()
+                .id(id)
                 .name(name)
                 .vip(vip)
                 .networkId(networkId);

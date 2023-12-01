@@ -162,7 +162,7 @@ public class KubevirtSyncStateCommand extends AbstractShellCommand {
         KubevirtRouterAdminService routerService = get(KubevirtRouterAdminService.class);
         Set<KubevirtRouter> existingRouters = routerService.routers();
         Set<String> existingRouterNames = existingRouters.stream()
-                .map(KubevirtRouter::name).collect(Collectors.toSet());
+                .map(KubevirtRouter::id).collect(Collectors.toSet());
         Map<String, Object> refRouters = client.customResource(routerCrdCxt).list();
         ObjectMapper mapper = new ObjectMapper();
 
@@ -174,9 +174,9 @@ public class KubevirtSyncStateCommand extends AbstractShellCommand {
             for (JsonValue item : items) {
                 KubevirtRouter router = parseKubevirtRouter(routerService, item.toString());
                 if (router != null) {
-                    if (existingRouterNames.contains(router.name())) {
+                    if (existingRouterNames.contains(router.id())) {
 
-                        KubevirtPeerRouter oldPeerRouter = routerService.router(router.name()).peerRouter();
+                        KubevirtPeerRouter oldPeerRouter = routerService.router(router.id()).peerRouter();
                         if (oldPeerRouter != null
                                 && Objects.equals(oldPeerRouter.ipAddress(), router.peerRouter().ipAddress())
                                 && oldPeerRouter.macAddress() != null
@@ -233,7 +233,7 @@ public class KubevirtSyncStateCommand extends AbstractShellCommand {
         KubevirtSecurityGroupAdminService sgService = get(KubevirtSecurityGroupAdminService.class);
         Set<KubevirtSecurityGroup> existingSgs = sgService.securityGroups();
         Set<String> existingSgNames = existingSgs.stream()
-                .map(KubevirtSecurityGroup::name).collect(Collectors.toSet());
+                .map(KubevirtSecurityGroup::id).collect(Collectors.toSet());
         Map<String, Object> refSgs = client.customResource(securityGroupCrdCxt).list();
         ObjectMapper mapper = new ObjectMapper();
 
@@ -244,7 +244,7 @@ public class KubevirtSyncStateCommand extends AbstractShellCommand {
             for (JsonValue item : items) {
                 KubevirtSecurityGroup sg = parseSecurityGroup(item.toString());
                 if (sg != null) {
-                    if (existingSgNames.contains(sg.name())) {
+                    if (existingSgNames.contains(sg.id())) {
                         KubevirtSecurityGroup orig = sgService.securityGroup(sg.id());
 
                         if (orig != null) {
@@ -299,7 +299,7 @@ public class KubevirtSyncStateCommand extends AbstractShellCommand {
         KubevirtLoadBalancerAdminService lbService = get(KubevirtLoadBalancerAdminService.class);
         Set<KubevirtLoadBalancer> existingLbs = lbService.loadBalancers();
         Set<String> existingLbNames = existingLbs.stream()
-                .map(KubevirtLoadBalancer::name).collect(Collectors.toSet());
+                .map(KubevirtLoadBalancer::id).collect(Collectors.toSet());
         Map<String, Object> refLbs = client.customResource(lbCrdCxt).list();
         ObjectMapper mapper = new ObjectMapper();
 
@@ -311,7 +311,7 @@ public class KubevirtSyncStateCommand extends AbstractShellCommand {
             for (JsonValue item : items) {
                 KubevirtLoadBalancer lb = parseKubevirtLoadBalancer(item.toString());
                 if (lb != null) {
-                    if (existingLbNames.contains(lb.name())) {
+                    if (existingLbNames.contains(lb.id())) {
                         lbService.updateLoadBalancer(lb);
                     } else {
                         lbService.createLoadBalancer(lb);
@@ -334,7 +334,7 @@ public class KubevirtSyncStateCommand extends AbstractShellCommand {
             ObjectNode spec = (ObjectNode) json.get(SPEC);
 
             KubevirtRouter router = codec(KubevirtRouter.class).decode(spec, this);
-            KubevirtRouter existing = service.router(router.name());
+            KubevirtRouter existing = service.router(router.id());
 
             if (existing == null) {
                 return router;

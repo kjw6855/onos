@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.onosproject.kubevirtnetworking.api.Constants.CLI_FLAG_LENGTH;
+import static org.onosproject.kubevirtnetworking.api.Constants.CLI_ID_LENGTH;
 import static org.onosproject.kubevirtnetworking.api.Constants.CLI_IP_ADDRESSES_LENGTH;
 import static org.onosproject.kubevirtnetworking.api.Constants.CLI_IP_ADDRESS_LENGTH;
 import static org.onosproject.kubevirtnetworking.api.Constants.CLI_MARGIN_LENGTH;
@@ -52,13 +53,13 @@ public class KubevirtListRouterCommand extends AbstractShellCommand {
         List<KubevirtRouter> routers = Lists.newArrayList(service.routers());
         routers.sort(Comparator.comparing(KubevirtRouter::name));
 
-        String format = genFormatString(ImmutableList.of(CLI_NAME_LENGTH,
+        String format = genFormatString(ImmutableList.of(CLI_ID_LENGTH, CLI_NAME_LENGTH,
                 CLI_FLAG_LENGTH, CLI_IP_ADDRESSES_LENGTH, CLI_IP_ADDRESS_LENGTH, CLI_NAME_LENGTH));
 
         if (outputJson()) {
             print("%s", json(routers));
         } else {
-            print(format, "Name", "SNAT", "Internal", "External", "GatewayNode");
+            print(format, "ID", "Name", "SNAT", "Internal", "External", "GatewayNode");
 
             for (KubevirtRouter router : routers) {
                 Set<String> internalNetworks = router.internal();
@@ -69,7 +70,9 @@ public class KubevirtListRouterCommand extends AbstractShellCommand {
                 String external = externalNetwork == null ? "[]" : externalNetwork;
                 String gwNode = router.electedGateway() == null ? "N/A" : router.electedGateway();
 
-                print(format, StringUtils.substring(router.name(), 0,
+                print(format, StringUtils.substring(router.id(), 0,
+                                CLI_ID_LENGTH - CLI_MARGIN_LENGTH),
+                        StringUtils.substring(router.name(), 0,
                         CLI_NAME_LENGTH - CLI_MARGIN_LENGTH),
                         StringUtils.substring(String.valueOf(router.enableSnat()), 0,
                                 CLI_FLAG_LENGTH - CLI_MARGIN_LENGTH),

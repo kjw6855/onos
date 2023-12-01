@@ -15,6 +15,7 @@
         "type": "object",
         "description": "A router object.",
         "required": [
+          "id",
           "name",
           "enableSnat",
           "mac",
@@ -23,6 +24,11 @@
           "peerRouter"
         ],
         "properties": {
+          "id": {
+            "type": "string",
+            "example": "26fcc876-f39a-459f-801d-75dcd3654ab8",
+            "description": "The ID of router."
+          },
           "name": {
             "type": "string",
             "example": "router-1",

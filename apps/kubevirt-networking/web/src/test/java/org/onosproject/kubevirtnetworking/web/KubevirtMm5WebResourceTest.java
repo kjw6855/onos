@@ -66,6 +66,7 @@ public class KubevirtMm5WebResourceTest extends ResourceTest {
     private static final String VR_STATUS_PATH = "api/mm5/v1/status/vr/";
     private static final String NETWORK_PATH = "api/mm5/v1/network";
 
+    private static final String ROUTER_ID = "26fcc876-f39a-459f-801d-75dcd3654ab8";
     private static final String ROUTER_NAME = "router1";
     private static final String HOST_NAME = "hostname1";
 
@@ -94,6 +95,7 @@ public class KubevirtMm5WebResourceTest extends ResourceTest {
 
 
     private static final KubevirtRouter ROUTER_1 = DefaultKubevirtRouter.builder()
+            .id(ROUTER_ID)
             .name(ROUTER_NAME).build();
 
     /**

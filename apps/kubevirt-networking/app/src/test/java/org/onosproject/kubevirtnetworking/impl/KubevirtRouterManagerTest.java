@@ -69,6 +69,7 @@ public class KubevirtRouterManagerTest {
 
     private static final ApplicationId TEST_APP_ID = new DefaultApplicationId(1, "test");
 
+    private static final String ROUTER_ID = "26fcc876-f39a-459f-801d-75dcd3654ab8";
     private static final String ROUTER_NAME = "router-1";
     private static final String POD_NAME = "pod-1";
     private static final String NETWORK_NAME = "flat-1";
@@ -79,6 +80,7 @@ public class KubevirtRouterManagerTest {
     private static final String UNKNOWN_ID = "unknown";
 
     private static final KubevirtRouter ROUTER = DefaultKubevirtRouter.builder()
+            .id(ROUTER_ID)
             .name(ROUTER_NAME)
             .description(ROUTER_NAME)
             .internal(ImmutableSet.of())
@@ -87,6 +89,7 @@ public class KubevirtRouterManagerTest {
             .build();
 
     private static final KubevirtRouter ROUTER_UPDATED = DefaultKubevirtRouter.builder()
+            .id(ROUTER_ID)
             .name(ROUTER_NAME)
             .description(UPDATED_DESCRIPTION)
             .internal(ImmutableSet.of())
@@ -95,6 +98,7 @@ public class KubevirtRouterManagerTest {
             .build();
 
     private static final KubevirtRouter ROUTER_WITH_INTERNAL = DefaultKubevirtRouter.builder()
+            .id(ROUTER_ID)
             .name(ROUTER_NAME)
             .description(ROUTER_NAME)
             .internal(ImmutableSet.of("vxlan-1", "vxlan-2"))
@@ -103,6 +107,7 @@ public class KubevirtRouterManagerTest {
             .build();
 
     private static final KubevirtRouter ROUTER_WITH_SINGLE_INTERNAL = DefaultKubevirtRouter.builder()
+            .id(ROUTER_ID)
             .name(ROUTER_NAME)
             .description(ROUTER_NAME)
             .internal(ImmutableSet.of("vxlan-1"))
@@ -111,6 +116,7 @@ public class KubevirtRouterManagerTest {
             .build();
 
     private static final KubevirtRouter ROUTER_WITH_EXTERNAL = DefaultKubevirtRouter.builder()
+            .id(ROUTER_ID)
             .name(ROUTER_NAME)
             .description(ROUTER_NAME)
             .internal(ImmutableSet.of())
@@ -122,14 +128,14 @@ public class KubevirtRouterManagerTest {
 
     private static final KubevirtFloatingIp FLOATING_IP_DISASSOCIATED = DefaultKubevirtFloatingIp.builder()
             .id(FLOATING_IP_ID)
-            .routerName(ROUTER_NAME)
+            .routerName(ROUTER_ID)
             .networkName(NETWORK_NAME)
             .floatingIp(IpAddress.valueOf("10.10.10.10"))
             .build();
 
     private static final KubevirtFloatingIp FLOATING_IP_ASSOCIATED = DefaultKubevirtFloatingIp.builder()
             .id(FLOATING_IP_ID)
-            .routerName(ROUTER_NAME)
+            .routerName(ROUTER_ID)
             .networkName(NETWORK_NAME)
             .floatingIp(IpAddress.valueOf("10.10.10.10"))
             .fixedIp(IpAddress.valueOf("20.20.20.20"))
@@ -182,7 +188,7 @@ public class KubevirtRouterManagerTest {
     @Test
     public void testGetRouterByName() {
         createBasicRouters();
-        assertNotNull("Router did not match", target.router(ROUTER_NAME));
+        assertNotNull("Router did not match", target.router(ROUTER_ID));
     }
 
     /**
@@ -192,11 +198,11 @@ public class KubevirtRouterManagerTest {
     public void testCreateAndRemoveRouter() {
         target.createRouter(ROUTER);
         assertEquals("Number of router did not match", 1, target.routers().size());
-        assertNotNull("Router was not created", target.router(ROUTER_NAME));
+        assertNotNull("Router was not created", target.router(ROUTER_ID));
 
-        target.removeRouter(ROUTER_NAME);
+        target.removeRouter(ROUTER_ID);
         assertEquals("Number of router did not match", 0, target.routers().size());
-        assertNull("Router was not created", target.router(ROUTER_NAME));
+        assertNull("Router was not created", target.router(ROUTER_ID));
 
         validateEvents(KUBEVIRT_ROUTER_CREATED, KUBEVIRT_ROUTER_REMOVED);
     }
@@ -211,7 +217,7 @@ public class KubevirtRouterManagerTest {
 
         target.updateRouter(ROUTER_UPDATED);
         assertEquals("Number of router did not match", 1, target.routers().size());
-        assertEquals("Router did not match", UPDATED_DESCRIPTION, target.router(ROUTER_NAME).description());
+        assertEquals("Router did not match", UPDATED_DESCRIPTION, target.router(ROUTER_ID).description());
 
         validateEvents(KUBEVIRT_ROUTER_CREATED, KUBEVIRT_ROUTER_UPDATED);
     }
@@ -223,9 +229,9 @@ public class KubevirtRouterManagerTest {
     public void testPeerRouterMacUpdate() {
         target.createRouter(ROUTER_WITH_EXTERNAL);
 
-        target.updatePeerRouterMac(ROUTER_NAME, UPDATED_MAC);
+        target.updatePeerRouterMac(ROUTER_ID, UPDATED_MAC);
         assertEquals("MAC address was not updated", UPDATED_MAC,
-                target.router(ROUTER_NAME).peerRouter().macAddress());
+                target.router(ROUTER_ID).peerRouter().macAddress());
 
         validateEvents(KUBEVIRT_ROUTER_CREATED, KUBEVIRT_ROUTER_UPDATED);
     }
@@ -237,15 +243,15 @@ public class KubevirtRouterManagerTest {
     public void testRouterInternalAttachedAndDetached() {
         target.createRouter(ROUTER);
         assertEquals("Number of router did not match", 1, target.routers().size());
-        assertEquals("Router internal did not match", 0, target.router(ROUTER_NAME).internal().size());
+        assertEquals("Router internal did not match", 0, target.router(ROUTER_ID).internal().size());
 
         target.updateRouter(ROUTER_WITH_INTERNAL);
         assertEquals("Number of router did not match", 1, target.routers().size());
-        assertEquals("Router internal did not match", 2, target.router(ROUTER_NAME).internal().size());
+        assertEquals("Router internal did not match", 2, target.router(ROUTER_ID).internal().size());
 
         target.updateRouter(ROUTER);
         assertEquals("Number of router did not match", 1, target.routers().size());
-        assertEquals("Router internal did not match", 0, target.router(ROUTER_NAME).internal().size());
+        assertEquals("Router internal did not match", 0, target.router(ROUTER_ID).internal().size());
 
         validateEvents(KUBEVIRT_ROUTER_CREATED, KUBEVIRT_ROUTER_UPDATED,
                 KUBEVIRT_ROUTER_INTERNAL_NETWORKS_ATTACHED, KUBEVIRT_ROUTER_UPDATED,
@@ -256,11 +262,11 @@ public class KubevirtRouterManagerTest {
     public void testRouterInternalShrink() {
         target.createRouter(ROUTER_WITH_INTERNAL);
         assertEquals("Number of router did not match", 1, target.routers().size());
-        assertEquals("Router internal did not match", 2, target.router(ROUTER_NAME).internal().size());
+        assertEquals("Router internal did not match", 2, target.router(ROUTER_ID).internal().size());
 
         target.updateRouter(ROUTER_WITH_SINGLE_INTERNAL);
         assertEquals("Number of router did not match", 1, target.routers().size());
-        assertEquals("Router internal did not match", 1, target.router(ROUTER_NAME).internal().size());
+        assertEquals("Router internal did not match", 1, target.router(ROUTER_ID).internal().size());
 
         validateEvents(KUBEVIRT_ROUTER_CREATED, KUBEVIRT_ROUTER_UPDATED,
                 KUBEVIRT_ROUTER_INTERNAL_NETWORKS_DETACHED);
@@ -275,18 +281,18 @@ public class KubevirtRouterManagerTest {
     public void testRouterExternalAttachedAndDetached() {
         target.createRouter(ROUTER);
         assertEquals("Number of router did not match", 1, target.routers().size());
-        assertNull(target.router(ROUTER_NAME).peerRouter());
-        assertEquals(0, target.router(ROUTER_NAME).external().size());
+        assertNull(target.router(ROUTER_ID).peerRouter());
+        assertEquals(0, target.router(ROUTER_ID).external().size());
 
         target.updateRouter(ROUTER_WITH_EXTERNAL);
         assertEquals("Number of router did not match", 1, target.routers().size());
-        assertNotNull(target.router(ROUTER_NAME).peerRouter());
-        assertEquals(1, target.router(ROUTER_NAME).external().size());
+        assertNotNull(target.router(ROUTER_ID).peerRouter());
+        assertEquals(1, target.router(ROUTER_ID).external().size());
 
         target.updateRouter(ROUTER);
         assertEquals("Number of router did not match", 1, target.routers().size());
-        assertNull(target.router(ROUTER_NAME).peerRouter());
-        assertEquals(0, target.router(ROUTER_NAME).external().size());
+        assertNull(target.router(ROUTER_ID).peerRouter());
+        assertEquals(0, target.router(ROUTER_ID).external().size());
 
         validateEvents(KUBEVIRT_ROUTER_CREATED, KUBEVIRT_ROUTER_UPDATED,
                 KUBEVIRT_ROUTER_EXTERNAL_NETWORK_ATTACHED, KUBEVIRT_ROUTER_UPDATED,
@@ -362,7 +368,7 @@ public class KubevirtRouterManagerTest {
     public void testGetFloatingIpsByRouterName() {
         createBasicFloatingIpDisassociated();
         assertEquals("Number of floating IPs did not match", 1,
-                target.floatingIpsByRouter(ROUTER_NAME).size());
+                target.floatingIpsByRouter(ROUTER_ID).size());
     }
 
     /**

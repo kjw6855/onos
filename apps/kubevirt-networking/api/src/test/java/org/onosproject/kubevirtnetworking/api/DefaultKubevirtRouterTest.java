@@ -33,6 +33,8 @@ import static org.onosproject.kubevirtnetworking.api.KubevirtNetwork.Type.VXLAN;
  */
 public class DefaultKubevirtRouterTest {
 
+    private static final String ID_1 = "26fcc876-f39a-459f-801d-75dcd3654ab8";
+    private static final String ID_2 = "1c14194b-04ca-4c79-b0c7-2d8bb964133f";
     private static final String NAME_1 = "router-1";
     private static final String NAME_2 = "router-2";
     private static final String DESCRIPTION_1 = "dummy router 1";
@@ -73,6 +75,7 @@ public class DefaultKubevirtRouterTest {
     @Before
     public void setUp() {
         router1 = DefaultKubevirtRouter.builder()
+                .id(ID_1)
                 .name(NAME_1)
                 .description(DESCRIPTION_1)
                 .enableSnat(ENABLE_SNAT_1)
@@ -83,6 +86,7 @@ public class DefaultKubevirtRouterTest {
                 .electedGateway(GATEWAY_HOST_1)
                 .build();
         sameAsRouter1 = DefaultKubevirtRouter.builder()
+                .id(ID_1)
                 .name(NAME_1)
                 .description(DESCRIPTION_1)
                 .enableSnat(ENABLE_SNAT_1)
@@ -93,6 +97,7 @@ public class DefaultKubevirtRouterTest {
                 .electedGateway(GATEWAY_HOST_1)
                 .build();
         router2 = DefaultKubevirtRouter.builder()
+                .id(ID_2)
                 .name(NAME_2)
                 .description(DESCRIPTION_2)
                 .enableSnat(ENABLE_SNAT_2)
@@ -121,6 +126,7 @@ public class DefaultKubevirtRouterTest {
     public void testConstruction() {
         KubevirtRouter router = router1;
 
+        assertEquals(ID_1, router.id());
         assertEquals(NAME_1, router.name());
         assertEquals(DESCRIPTION_1, router.description());
         assertEquals(ENABLE_SNAT_1, router.enableSnat());

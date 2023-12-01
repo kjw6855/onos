@@ -35,6 +35,7 @@ public final class DefaultKubevirtRouter implements KubevirtRouter {
 
     private static final String NOT_NULL_MSG = "Router % cannot be null";
 
+    private final String id;
     private final String name;
     private final String description;
     private final boolean enableSnat;
@@ -47,6 +48,7 @@ public final class DefaultKubevirtRouter implements KubevirtRouter {
     /**
      * A default constructor.
      *
+     * @param id            router id
      * @param name          router name
      * @param description   router description
      * @param enableSnat    snat use indicator
@@ -56,12 +58,13 @@ public final class DefaultKubevirtRouter implements KubevirtRouter {
      * @param peerRouter    external peer router
      * @param gateway       elected gateway node id
      */
-    public DefaultKubevirtRouter(String name, String description,
+    public DefaultKubevirtRouter(String id, String name, String description,
                                  boolean enableSnat, MacAddress mac,
                                  Set<String> internal,
                                  Map<String, String> external,
                                  KubevirtPeerRouter peerRouter,
                                  String gateway) {
+        this.id = id;
         this.name = name;
         this.description = description;
         this.enableSnat = enableSnat;
@@ -70,6 +73,11 @@ public final class DefaultKubevirtRouter implements KubevirtRouter {
         this.external = external;
         this.peerRouter = peerRouter;
         this.gateway = gateway;
+    }
+
+    @Override
+    public String id() {
+        return id;
     }
 
     @Override
@@ -123,6 +131,7 @@ public final class DefaultKubevirtRouter implements KubevirtRouter {
     @Override
     public KubevirtRouter updatePeerRouter(KubevirtPeerRouter updated) {
         return DefaultKubevirtRouter.builder()
+                .id(id)
                 .name(name)
                 .enableSnat(enableSnat)
                 .description(description)
@@ -137,6 +146,7 @@ public final class DefaultKubevirtRouter implements KubevirtRouter {
     @Override
     public KubevirtRouter updatedElectedGateway(String updated) {
         return DefaultKubevirtRouter.builder()
+                .id(id)
                 .name(name)
                 .enableSnat(enableSnat)
                 .description(description)
@@ -157,7 +167,7 @@ public final class DefaultKubevirtRouter implements KubevirtRouter {
             return false;
         }
         DefaultKubevirtRouter that = (DefaultKubevirtRouter) o;
-        return enableSnat == that.enableSnat && name.equals(that.name) &&
+        return id.equals(that.id) && enableSnat == that.enableSnat && name.equals(that.name) &&
                 description.equals(that.description) && mac.equals(that.mac) &&
                 internal.equals(that.internal) && external.equals(that.external) &&
                 peerRouter.equals(that.peerRouter) && gateway.equals(that.electedGateway());
@@ -165,12 +175,13 @@ public final class DefaultKubevirtRouter implements KubevirtRouter {
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, description, mac);
+        return Objects.hash(id, name, description, mac);
     }
 
     @Override
     public String toString() {
         return MoreObjects.toStringHelper(this)
+                .add("id", id)
                 .add("name", name)
                 .add("description", description)
                 .add("enableSnat", enableSnat)
@@ -193,6 +204,7 @@ public final class DefaultKubevirtRouter implements KubevirtRouter {
 
     public static final class Builder implements KubevirtRouter.Builder {
 
+        private String id;
         private String name;
         private String description;
         private boolean enableSnat;
@@ -204,10 +216,17 @@ public final class DefaultKubevirtRouter implements KubevirtRouter {
 
         @Override
         public KubevirtRouter build() {
+            checkArgument(id != null, NOT_NULL_MSG, "id");
             checkArgument(name != null, NOT_NULL_MSG, "name");
 
-            return new DefaultKubevirtRouter(name, description, enableSnat, mac,
-                    internal, external, peerRouter, gateway);
+            return new DefaultKubevirtRouter(id, name, description, enableSnat,
+                    mac, internal, external, peerRouter, gateway);
+        }
+
+        @Override
+        public Builder id(String id) {
+            this.id = id;
+            return this;
         }
 
         @Override

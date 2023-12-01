@@ -1,4 +1,5 @@
 {
+  "id": "26fcc876-f39a-459f-801d-75dcd3654ab8",
   "name": "lb-1",
   "description": "Example Load Balancer",
   "networkId": "net-1",

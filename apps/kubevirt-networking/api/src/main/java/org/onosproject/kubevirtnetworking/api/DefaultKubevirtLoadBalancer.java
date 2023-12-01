@@ -31,6 +31,7 @@ public final class DefaultKubevirtLoadBalancer implements KubevirtLoadBalancer {
 
     private static final String NOT_NULL_MSG = "Loadbalancer % cannot be null";
 
+    private final String id;
     private final String name;
     private final String description;
     private final String networkId;
@@ -41,6 +42,7 @@ public final class DefaultKubevirtLoadBalancer implements KubevirtLoadBalancer {
     /**
      * Default constructor.
      *
+     * @param id                load balancer id
      * @param name              load balancer name
      * @param description       load balancer description
      * @param networkId         load balancer network identifier
@@ -48,15 +50,22 @@ public final class DefaultKubevirtLoadBalancer implements KubevirtLoadBalancer {
      * @param members           load balancer members
      * @param rules             load balancer rules
      */
-    public DefaultKubevirtLoadBalancer(String name, String description, String networkId,
-                                       IpAddress vip, Set<IpAddress> members,
+    public DefaultKubevirtLoadBalancer(String id, String name, String description,
+                                       String networkId, IpAddress vip,
+                                       Set<IpAddress> members,
                                        Set<KubevirtLoadBalancerRule> rules) {
+        this.id = id;
         this.name = name;
         this.description = description;
         this.networkId = networkId;
         this.vip = vip;
         this.members = members;
         this.rules = rules;
+    }
+
+    @Override
+    public String id() {
+        return id;
     }
 
     @Override
@@ -106,19 +115,21 @@ public final class DefaultKubevirtLoadBalancer implements KubevirtLoadBalancer {
             return false;
         }
         DefaultKubevirtLoadBalancer that = (DefaultKubevirtLoadBalancer) o;
-        return name.equals(that.name) && Objects.equals(description, that.description) &&
+        return id.equals(that.id) && name.equals(that.name) &&
+                Objects.equals(description, that.description) &&
                 networkId.equals(that.networkId) && vip.equals(that.vip) &&
                 Objects.equals(members, that.members) && Objects.equals(rules, that.rules);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, description, networkId, vip, members, rules);
+        return Objects.hash(id, name, description, networkId, vip, members, rules);
     }
 
     @Override
     public String toString() {
         return MoreObjects.toStringHelper(this)
+                .add("id", id)
                 .add("name", name)
                 .add("description", description)
                 .add("networkId", networkId)
@@ -134,6 +145,7 @@ public final class DefaultKubevirtLoadBalancer implements KubevirtLoadBalancer {
 
     public static final class Builder implements KubevirtLoadBalancer.Builder {
 
+        private String id;
         private String name;
         private String description;
         private String networkId;
@@ -147,11 +159,18 @@ public final class DefaultKubevirtLoadBalancer implements KubevirtLoadBalancer {
 
         @Override
         public KubevirtLoadBalancer build() {
+            checkArgument(id != null, NOT_NULL_MSG, "id");
             checkArgument(networkId != null, NOT_NULL_MSG, "networkId");
             checkArgument(name != null, NOT_NULL_MSG, "name");
             checkArgument(vip != null, NOT_NULL_MSG, "vip");
 
-            return new DefaultKubevirtLoadBalancer(name, description, networkId, vip, members, rules);
+            return new DefaultKubevirtLoadBalancer(id, name, description, networkId, vip, members, rules);
+        }
+
+        @Override
+        public Builder id(String id) {
+            this.id = id;
+            return this;
         }
 
         @Override

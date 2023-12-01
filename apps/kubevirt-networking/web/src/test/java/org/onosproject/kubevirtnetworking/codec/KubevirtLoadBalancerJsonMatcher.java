@@ -28,6 +28,7 @@ import org.onosproject.kubevirtnetworking.api.KubevirtLoadBalancerRule;
  */
 public final class KubevirtLoadBalancerJsonMatcher extends TypeSafeDiagnosingMatcher<JsonNode> {
 
+    private static final String ID = "id";
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
     private static final String VIP = "vip";
@@ -43,6 +44,14 @@ public final class KubevirtLoadBalancerJsonMatcher extends TypeSafeDiagnosingMat
 
     @Override
     protected boolean matchesSafely(JsonNode jsonNode, Description description) {
+        // check ID
+        String jsonId = jsonNode.get(ID).asText();
+        String id = lb.id();
+        if (!jsonId.equals(id)) {
+            description.appendText("ID was " + jsonId);
+            return false;
+        }
+
         // check name
         String jsonName = jsonNode.get(NAME).asText();
         String name = lb.name();

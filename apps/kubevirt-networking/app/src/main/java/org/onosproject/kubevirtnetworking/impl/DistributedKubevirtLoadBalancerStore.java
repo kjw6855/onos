@@ -117,8 +117,8 @@ public class DistributedKubevirtLoadBalancerStore
 
     @Override
     public void createLoadBalancer(KubevirtLoadBalancer lb) {
-        loadBalancerStore.compute(lb.name(), (name, existing) -> {
-            final String error = lb.name() + ERR_DUPLICATE;
+        loadBalancerStore.compute(lb.id(), (id, existing) -> {
+            final String error = lb.id() + ERR_DUPLICATE;
             checkArgument(existing == null, error);
             return lb;
         });
@@ -126,26 +126,26 @@ public class DistributedKubevirtLoadBalancerStore
 
     @Override
     public void updateLoadBalancer(KubevirtLoadBalancer lb) {
-        loadBalancerStore.compute(lb.name(), (name, existing) -> {
-            final String error = lb.name() + ERR_NOT_FOUND;
+        loadBalancerStore.compute(lb.id(), (id, existing) -> {
+            final String error = lb.id() + ERR_NOT_FOUND;
             checkArgument(existing != null, error);
             return lb;
         });
     }
 
     @Override
-    public KubevirtLoadBalancer removeLoadBalancer(String name) {
-        Versioned<KubevirtLoadBalancer> lb = loadBalancerStore.remove(name);
+    public KubevirtLoadBalancer removeLoadBalancer(String id) {
+        Versioned<KubevirtLoadBalancer> lb = loadBalancerStore.remove(id);
         if (lb == null) {
-            final String error = name + ERR_NOT_FOUND;
+            final String error = id + ERR_NOT_FOUND;
             throw new IllegalArgumentException(error);
         }
         return lb.value();
     }
 
     @Override
-    public KubevirtLoadBalancer loadBalancer(String name) {
-        return loadBalancerStore.asJavaMap().get(name);
+    public KubevirtLoadBalancer loadBalancer(String id) {
+        return loadBalancerStore.asJavaMap().get(id);
     }
 
     @Override

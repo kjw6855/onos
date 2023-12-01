@@ -83,6 +83,7 @@ import io.fabric8.kubernetes.api.model.SecurityContext;
 import io.fabric8.kubernetes.api.model.ServiceAccountTokenProjection;
 import io.fabric8.kubernetes.api.model.TCPSocketAction;
 import io.fabric8.kubernetes.api.model.Toleration;
+import io.fabric8.kubernetes.api.model.TopologySpreadConstraint;
 import io.fabric8.kubernetes.api.model.Volume;
 import io.fabric8.kubernetes.api.model.VolumeDevice;
 import io.fabric8.kubernetes.api.model.VolumeMount;
@@ -226,6 +227,7 @@ public class DistributedKubevirtPodStore
             .register(PreferredSchedulingTerm.class)
             .register(PodAffinity.class)
             .register(WeightedPodAffinityTerm.class)
+            .register(TopologySpreadConstraint.class)
             .register(PodAffinityTerm.class)
             .register(LabelSelector.class)
             .register(LabelSelectorRequirement.class)

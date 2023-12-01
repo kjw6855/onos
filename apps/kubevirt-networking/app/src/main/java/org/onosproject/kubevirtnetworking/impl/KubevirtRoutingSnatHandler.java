@@ -696,7 +696,8 @@ public class KubevirtRoutingSnatHandler {
             if (!isRelevantHelper()) {
                 return;
             }
-            if (router.enableSnat() && !router.external().isEmpty() && router.peerRouter() != null) {
+            if (router.enableSnat() && !router.external().isEmpty() && router.peerRouter() != null &&
+                    router.electedGateway() != null) {
                 initGatewayNodeSnatForRouter(router, router.electedGateway(), true);
 
                 KubevirtNode gatewayNode = kubevirtNodeService.node(router.electedGateway());

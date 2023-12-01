@@ -215,7 +215,7 @@ public class KubevirtLoadBalancerWatcher extends AbstractWatcher {
 
             KubevirtLoadBalancer lb = parseKubevirtLoadBalancer(resource);
             if (lb != null) {
-                if (adminService.loadBalancer(lb.name()) == null) {
+                if (adminService.loadBalancer(lb.id()) == null) {
                     adminService.createLoadBalancer(lb);
                 }
             }

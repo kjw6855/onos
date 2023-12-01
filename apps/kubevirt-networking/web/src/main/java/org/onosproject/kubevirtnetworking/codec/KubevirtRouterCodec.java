@@ -43,6 +43,7 @@ public final class KubevirtRouterCodec extends JsonCodec<KubevirtRouter> {
 
     private final Logger log = getLogger(getClass());
 
+    private static final String ID = "id";
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
     private static final String ENABLE_SNAT = "enableSnat";
@@ -61,7 +62,8 @@ public final class KubevirtRouterCodec extends JsonCodec<KubevirtRouter> {
         checkNotNull(router, "Kubevirt router cannot be null");
 
         ObjectNode result = context.mapper().createObjectNode()
-                .put(NAME, router.name())
+                .put(ID, router.id())
+                .put(NAME, router.id())
                 .put(ENABLE_SNAT, router.enableSnat())
                 .put(MAC_ADDRESS, router.mac().toString());
 
@@ -111,13 +113,17 @@ public final class KubevirtRouterCodec extends JsonCodec<KubevirtRouter> {
             return null;
         }
 
-        String name = nullIsIllegal(json.get(NAME).asText(),
+        String id = nullIsIllegal(json.get(ID).asText(),
+                ID + MISSING_MESSAGE);
+
+        String name = nullIsIllegal(json.get(ID).asText(),
                 NAME + MISSING_MESSAGE);
 
         String vrouterMac = nullIsIllegal(json.get(MAC_ADDRESS).asText(),
                 MAC_ADDRESS + MISSING_MESSAGE);
 
         KubevirtRouter.Builder builder = DefaultKubevirtRouter.builder()
+                .id(id)
                 .name(name)
                 .mac(MacAddress.valueOf(vrouterMac));
 

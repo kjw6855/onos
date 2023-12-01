@@ -49,12 +49,14 @@ public class KubevirtLoadBalancerManagerTest {
 
     private static final ApplicationId TEST_APP_ID = new DefaultApplicationId(1, "test");
 
+    private static final String LB_ID = "26fcc876-f39a-459f-801d-75dcd3654ab8";
     private static final String LB_NAME = "lb-1";
     private static final String NETWORK_NAME = "vxlan-1";
     private static final String UPDATED_DESCRIPTION = "lb-updated";
     private static final String UNKNOWN_ID = "unknown";
 
     private static final KubevirtLoadBalancer LB = DefaultKubevirtLoadBalancer.builder()
+            .id(LB_ID)
             .name(LB_NAME)
             .description(LB_NAME)
             .networkId(NETWORK_NAME)
@@ -64,6 +66,7 @@ public class KubevirtLoadBalancerManagerTest {
             .build();
 
     private static final KubevirtLoadBalancer LB_UPDATED = DefaultKubevirtLoadBalancer.builder()
+            .id(LB_ID)
             .name(LB_NAME)
             .description(UPDATED_DESCRIPTION)
             .networkId(NETWORK_NAME)
@@ -73,6 +76,7 @@ public class KubevirtLoadBalancerManagerTest {
             .build();
 
     private static final KubevirtLoadBalancer LB_WITH_MEMBERS = DefaultKubevirtLoadBalancer.builder()
+            .id(LB_ID)
             .name(LB_NAME)
             .description(LB_NAME)
             .networkId(NETWORK_NAME)
@@ -124,9 +128,9 @@ public class KubevirtLoadBalancerManagerTest {
      * Tests if getting a load balancer with ID returns the correct load balancer.
      */
     @Test
-    public void testGetLoadBalancerByName() {
+    public void testGetLoadBalancerById() {
         createBasicLoadBalancers();
-        assertNotNull("Load balancer did not match", target.loadBalancer(LB_NAME));
+        assertNotNull("Load balancer did not match", target.loadBalancer(LB_ID));
         assertNull("Load balancer did not match", target.loadBalancer(UNKNOWN_ID));
     }
 
@@ -137,11 +141,11 @@ public class KubevirtLoadBalancerManagerTest {
     public void testCreateAndRemoveLoadBalancer() {
         target.createLoadBalancer(LB);
         assertEquals("Number of load balancers did not match", 1, target.loadBalancers().size());
-        assertNotNull("Load balancer was not created", target.loadBalancer(LB_NAME));
+        assertNotNull("Load balancer was not created", target.loadBalancer(LB_ID));
 
-        target.removeLoadBalancer(LB_NAME);
+        target.removeLoadBalancer(LB_ID);
         assertEquals("Number of load balancers did not match", 0, target.loadBalancers().size());
-        assertNull("Load balancer was not removed", target.loadBalancer(LB_NAME));
+        assertNull("Load balancer was not removed", target.loadBalancer(LB_ID));
 
         validateEvents(KUBEVIRT_LOAD_BALANCER_CREATED, KUBEVIRT_LOAD_BALANCER_REMOVED);
     }
@@ -153,11 +157,11 @@ public class KubevirtLoadBalancerManagerTest {
     public void testCreateAndUpdateLoadBalancer() {
         target.createLoadBalancer(LB);
         assertEquals("Number of load balancers did not match", 1, target.loadBalancers().size());
-        assertEquals("Load balancer did not match", LB_NAME, target.loadBalancer(LB_NAME).name());
+        assertEquals("Load balancer did not match", LB_ID, target.loadBalancer(LB_ID).id());
 
         target.updateLoadBalancer(LB_UPDATED);
         assertEquals("Number of load balancers did not match", 1, target.loadBalancers().size());
-        assertEquals("Load balancer did not match", LB_NAME, target.loadBalancer(LB_NAME).name());
+        assertEquals("Load balancer did not match", LB_ID, target.loadBalancer(LB_ID).id());
 
         validateEvents(KUBEVIRT_LOAD_BALANCER_CREATED, KUBEVIRT_LOAD_BALANCER_UPDATED);
     }

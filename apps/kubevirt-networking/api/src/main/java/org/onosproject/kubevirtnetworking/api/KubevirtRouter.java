@@ -26,6 +26,13 @@ import java.util.Set;
 public interface KubevirtRouter {
 
     /**
+     * Return the router id.
+     *
+     * @return router id
+     */
+    String id();
+
+    /**
      * Returns the router name.
      *
      * @return router name
@@ -107,6 +114,14 @@ public interface KubevirtRouter {
          * @return kubevirt router
          */
         KubevirtRouter build();
+
+        /**
+         * Returns kubevirt router builder with supplied router id.
+         *
+         * @param id router id
+         * @return router builder
+         */
+        Builder id(String id);
 
         /**
          * Returns kubevirt router builder with supplied router name.

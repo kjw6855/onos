@@ -268,20 +268,30 @@ public class KubevirtVmWatcher {
                 KubevirtPort existing = portAdminService.port(port.macAddress());
                 Set<String> sgs = parseSecurityGroups(resource);
 
+                Map<String, IpAddress> ips = parseIpAddresses(resource);
+                IpAddress ip = ips.get(port.networkId());
+
                 if (existing == null) {
                     // if the network related information is filled with VM update event,
                     // and there is no port found in the store
                     // we try to add port by extracting network related info from VM
                     port = port.updateSecurityGroups(sgs);
-                    Map<String, IpAddress> ips = parseIpAddresses(resource);
-                    IpAddress ip = ips.get(port.networkId());
                     port = port.updateIpAddress(ip);
                     portAdminService.createPort(port);
                 } else {
-                    // we only update the port, if the newly updated security groups
-                    // have different values compared to existing ones
-                    if (!port.securityGroups().equals(sgs)) {
-                        portAdminService.updatePort(existing.updateSecurityGroups(sgs));
+                    // we only update the port, if either the newly updated
+                    // security groups have different values compared to existing
+                    // ones or the newly updated IP address has been changed
+                    KubevirtPort updatedPort = existing;
+                    if (!existing.securityGroups().equals(sgs)) {
+                        updatedPort = updatedPort.updateSecurityGroups(sgs);
+                    }
+                    if (!existing.ipAddress().equals(ip)) {
+                        updatedPort = updatedPort.updateIpAddress(ip);
+                    }
+                    if (!existing.securityGroups().equals(sgs) ||
+                            !existing.ipAddress().equals(ip)) {
+                        portAdminService.updatePort(updatedPort);
                     }
                 }
             });

@@ -156,8 +156,8 @@ public class DistributedKubevirtRouterStore
 
     @Override
     public void createRouter(KubevirtRouter router) {
-        routerStore.compute(router.name(), (name, existing) -> {
-            final String error = router.name() + ERR_DUPLICATE;
+        routerStore.compute(router.id(), (id, existing) -> {
+            final String error = router.id() + ERR_DUPLICATE;
             checkArgument(existing == null, error);
             return router;
         });
@@ -165,26 +165,26 @@ public class DistributedKubevirtRouterStore
 
     @Override
     public void updateRouter(KubevirtRouter router) {
-        routerStore.compute(router.name(), (name, existing) -> {
-            final String error = router.name() + ERR_NOT_FOUND;
+        routerStore.compute(router.id(), (id, existing) -> {
+            final String error = router.id() + ERR_NOT_FOUND;
             checkArgument(existing != null, error);
             return router;
         });
     }
 
     @Override
-    public KubevirtRouter removeRouter(String name) {
-        Versioned<KubevirtRouter> router = routerStore.remove(name);
+    public KubevirtRouter removeRouter(String id) {
+        Versioned<KubevirtRouter> router = routerStore.remove(id);
         if (router == null) {
-            final String error = name + ERR_NOT_FOUND;
+            final String error = id + ERR_NOT_FOUND;
             throw new IllegalArgumentException(error);
         }
         return router.value();
     }
 
     @Override
-    public KubevirtRouter router(String name) {
-        return routerStore.asJavaMap().get(name);
+    public KubevirtRouter router(String id) {
+        return routerStore.asJavaMap().get(id);
     }
 
     @Override
@@ -270,9 +270,9 @@ public class DistributedKubevirtRouterStore
                             KUBEVIRT_ROUTER_UPDATED, event.newValue().value())));
 
             KubevirtRouter router = Strings.isNullOrEmpty(
-                    event.newValue().value().name()) ?
+                    event.newValue().value().id()) ?
                     null :
-                    router(event.newValue().value().name());
+                    router(event.newValue().value().id());
 
             KubevirtRouter oldValue = event.oldValue().value();
             KubevirtRouter newValue = event.newValue().value();

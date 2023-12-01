@@ -29,6 +29,7 @@ import org.onosproject.kubevirtnetworking.api.KubevirtLoadBalancerService;
 import java.util.Comparator;
 import java.util.List;
 
+import static org.onosproject.kubevirtnetworking.api.Constants.CLI_ID_LENGTH;
 import static org.onosproject.kubevirtnetworking.api.Constants.CLI_IP_ADDRESSES_LENGTH;
 import static org.onosproject.kubevirtnetworking.api.Constants.CLI_IP_ADDRESS_LENGTH;
 import static org.onosproject.kubevirtnetworking.api.Constants.CLI_MARGIN_LENGTH;
@@ -49,16 +50,18 @@ public class KubevirtListLoadBalancerCommand extends AbstractShellCommand {
         List<KubevirtLoadBalancer> lbs = Lists.newArrayList(service.loadBalancers());
         lbs.sort(Comparator.comparing(KubevirtLoadBalancer::name));
 
-        String format = genFormatString(ImmutableList.of(CLI_NAME_LENGTH, CLI_NAME_LENGTH,
+        String format = genFormatString(ImmutableList.of(CLI_ID_LENGTH, CLI_NAME_LENGTH, CLI_NAME_LENGTH,
                 CLI_IP_ADDRESS_LENGTH, CLI_IP_ADDRESSES_LENGTH));
 
         if (outputJson()) {
             print("%s", json(lbs));
         } else {
-            print(format, "Name", "NetworkId", "Virtual IP", "Members");
+            print(format, "ID", "Name", "NetworkId", "Virtual IP", "Members");
 
             for (KubevirtLoadBalancer lb : lbs) {
                 print(format,
+                        StringUtils.substring(lb.id(),
+                                0, CLI_ID_LENGTH - CLI_MARGIN_LENGTH),
                         StringUtils.substring(lb.name(),
                                 0, CLI_NAME_LENGTH - CLI_MARGIN_LENGTH),
                         StringUtils.substring(lb.networkId(),

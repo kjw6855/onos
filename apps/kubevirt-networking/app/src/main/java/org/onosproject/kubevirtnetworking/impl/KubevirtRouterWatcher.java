@@ -247,7 +247,7 @@ public class KubevirtRouterWatcher extends AbstractWatcher {
             KubevirtRouter router = parseKubevirtRouter(resource);
 
             KubevirtPeerRouter oldPeerRouter = adminService.router(router.id()).peerRouter();
-            if (oldPeerRouter != null
+            if (oldPeerRouter != null && router.peerRouter() != null
                     && Objects.equals(oldPeerRouter.ipAddress(), router.peerRouter().ipAddress())
                     && oldPeerRouter.macAddress() != null
                     && router.peerRouter().macAddress() == null) {

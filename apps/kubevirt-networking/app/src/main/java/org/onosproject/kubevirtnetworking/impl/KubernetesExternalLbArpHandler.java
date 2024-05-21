@@ -341,7 +341,7 @@ public class KubernetesExternalLbArpHandler {
     private void retrievePeerMac(IpAddress srcIp, MacAddress srcMac,
                                  IpAddress peerIp, KubevirtNode gatewayNode,
                                  PortNumber portNumber) {
-        log.trace("Sending ARP request to the peer {} to retrieve the MAC address.",
+        log.debug("Sending ARP request to the peer {} to retrieve the MAC address.",
                 peerIp.getIp4Address().toString());
 
         Ethernet ethRequest = ARP.buildArpRequest(srcMac.toBytes(),

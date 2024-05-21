@@ -424,7 +424,7 @@ public final class KubevirtNetworkingUtil {
                         .filter(n -> (NETWORK_PREFIX + n.name()).equals(name) ||
                                      (n.name() + "-net").equals(name))
                         .findAny().orElse(null);
-                if (network != null) {
+                if (network != null && interfaceJson.get(MAC) != null) {
                     // FIXME: we do not update IP address, as learning IP address
                     // requires much more time due to the lag from VM agent
                     String mac = interfaceJson.get(MAC).asText();
@@ -454,6 +454,19 @@ public final class KubevirtNetworkingUtil {
         }
 
         return nodeName;
+    }
+
+    /**
+     * Gets the number of tenant networks which have the identical segmentation ID of the given network.
+     *
+     * @param networkService    network service
+     * @param network           kubevirt network
+     * @return number of tenant networks
+     */
+    public static long numOfDupSegNetworks(KubevirtNetworkService networkService, KubevirtNetwork network) {
+        return networkService.networks().stream()
+                .filter(n -> Objects.equals(network.segmentId(), n.segmentId()))
+                .filter(n -> !Objects.equals(network.networkId(), n.networkId())).count();
     }
 
     /**

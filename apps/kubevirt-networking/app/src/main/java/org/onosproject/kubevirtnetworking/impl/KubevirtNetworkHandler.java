@@ -16,6 +16,7 @@
 package org.onosproject.kubevirtnetworking.impl;
 
 import com.google.common.collect.Lists;
+import org.apache.commons.lang.StringUtils;
 import org.onlab.packet.ARP;
 import org.onlab.packet.EthType;
 import org.onlab.packet.Ethernet;
@@ -65,6 +66,8 @@ import org.onosproject.net.behaviour.DefaultPatchDescription;
 import org.onosproject.net.behaviour.InterfaceConfig;
 import org.onosproject.net.behaviour.PatchDescription;
 import org.onosproject.net.device.DeviceAdminService;
+import org.onosproject.net.device.DeviceEvent;
+import org.onosproject.net.device.DeviceListener;
 import org.onosproject.net.driver.DriverService;
 import org.onosproject.net.flow.DefaultTrafficSelector;
 import org.onosproject.net.flow.DefaultTrafficTreatment;
@@ -77,6 +80,7 @@ import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.slf4j.Logger;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -117,6 +121,7 @@ import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.get
 import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.getRouterForKubevirtPort;
 import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.getRouterMacAddress;
 import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.kubernetesElbMac;
+import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.numOfDupSegNetworks;
 import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.portNumber;
 import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.resolveHostname;
 import static org.onosproject.kubevirtnetworking.util.KubevirtNetworkingUtil.segmentIdHex;
@@ -195,6 +200,8 @@ public class KubevirtNetworkHandler {
     private final InternalRouterEventListener kubevirtRouterlistener =
             new InternalRouterEventListener();
 
+    private final DeviceListener bridgeListener = new InternalBridgeListener();
+
     private final ExecutorService eventExecutor = newSingleThreadExecutor(
             groupedThreads(this.getClass().getSimpleName(), "event-handler"));
 
@@ -209,6 +216,7 @@ public class KubevirtNetworkHandler {
 
         networkService.addListener(networkListener);
         nodeService.addListener(nodeListener);
+        deviceService.addListener(bridgeListener);
         kubevirtPortService.addListener(portListener);
         kubevirtRouterService.addListener(kubevirtRouterlistener);
 
@@ -219,6 +227,7 @@ public class KubevirtNetworkHandler {
     protected void deactivate() {
         networkService.removeListener(networkListener);
         nodeService.removeListener(nodeListener);
+        deviceService.removeListener(bridgeListener);
         kubevirtPortService.removeListener(portListener);
         kubevirtRouterService.removeListener(kubevirtRouterlistener);
         leadershipService.withdraw(appId.name());
@@ -231,7 +240,7 @@ public class KubevirtNetworkHandler {
 
         Device tenantBridge = deviceService.getDevice(network.tenantDeviceId(node.hostname()));
         if (tenantBridge != null && deviceService.isAvailable(tenantBridge.id())) {
-            log.warn("The tenant bridge {} already exists at node {}",
+            log.info("The tenant bridge {} already exists at node {}",
                     network.tenantBridgeName(), node.hostname());
             return;
         }
@@ -421,8 +430,21 @@ public class KubevirtNetworkHandler {
         setForwardingRule(deviceId, true);
 
         // security group related rules
-        setTenantIngressTransitionRule(network, network.tenantDeviceId(node.hostname()), true);
         setTenantEgressTransitionRule(network.tenantDeviceId(node.hostname()), true);
+
+        // if patch port is available, we install ingress transition rule;
+        // otherwise the patch port event will trigger the rule installation
+        boolean installed = false;
+        for (Port port : deviceService.getPorts(deviceId)) {
+            String portName = port.annotations().value(PORT_NAME);
+            if (StringUtils.startsWithIgnoreCase(portName, TENANT_TO_TUNNEL_PREFIX)) {
+                setTenantIngressTransitionRule(deviceId, port, true);
+                installed = true;
+            }
+        }
+        if (!installed) {
+            log.warn("Installing ingress transition rule failed on tenant bridge {}", network.tenantBridgeName());
+        }
 
         log.info("Install default flow rules for tenant bridge {}", network.tenantBridgeName());
     }
@@ -558,25 +580,6 @@ public class KubevirtNetworkHandler {
                 install);
     }
 
-    private void setTenantIngressTransitionRule(KubevirtNetwork network,
-                                                DeviceId deviceId, boolean install) {
-        TrafficSelector.Builder sBuilder = DefaultTrafficSelector.builder();
-        sBuilder.matchEthType(EthType.EtherType.IPV4.ethType().toShort())
-                .matchInPort(network.tenantToTunnelPort(deviceId));
-
-        TrafficTreatment.Builder tBuilder = DefaultTrafficTreatment.builder();
-        tBuilder.transition(TENANT_ACL_INGRESS_TABLE);
-
-        flowService.setRule(appId,
-                deviceId,
-                sBuilder.build(),
-                tBuilder.build(),
-                PRIORITY_IP_INGRESS_RULE,
-                TENANT_ICMP_TABLE,
-                install
-        );
-    }
-
     private void setTenantEgressTransitionRule(DeviceId deviceId, boolean install) {
         TrafficSelector.Builder sBuilder = DefaultTrafficSelector.builder();
         sBuilder.matchEthType(EthType.EtherType.IPV4.ethType().toShort());
@@ -601,7 +604,7 @@ public class KubevirtNetworkHandler {
         MacAddress routerMacAddress = getRouterMacAddress(router);
 
         if (routerMacAddress == null) {
-            log.warn("Setting gateway default eggress rule to gateway for tenant internal network because " +
+            log.warn("Setting gateway default egress rule to gateway for tenant internal network because " +
                     "there's no br-int port for device {}", gwDeviceId);
             return;
         }
@@ -609,7 +612,7 @@ public class KubevirtNetworkHandler {
         KubevirtNode gwNode = kubevirtNodeService.node(gwDeviceId);
 
         if (gwNode == null) {
-            log.warn("Setting gateway default eggress rule to gateway for tenant internal network because " +
+            log.warn("Setting gateway default egress rule to gateway for tenant internal network because " +
                     "there's no gateway node for device {}", gwDeviceId);
             return;
         }
@@ -1251,7 +1254,9 @@ public class KubevirtNetworkHandler {
                 return;
             }
 
-            nodeService.completeNodes(WORKER).forEach(n -> {
+            nodeService.completeNodes(WORKER).stream()
+                    .sorted(Comparator.comparing(KubevirtNode::hostname))
+                    .forEach(n -> {
                 createBridge(n, network);
                 createPatchTenantInterface(n, network);
                 setDefaultRulesForTenantNetwork(n, network);
@@ -1263,12 +1268,15 @@ public class KubevirtNetworkHandler {
                 return;
             }
 
-            nodeService.completeNodes(WORKER).forEach(n -> {
+            if (numOfDupSegNetworks(networkService, network) > 0) {
+                return;
+            }
+            nodeService.completeNodes(WORKER).stream()
+                    .sorted(Comparator.comparing(KubevirtNode::hostname))
+                    .forEach(n -> {
                 removeAllFlows(n, network);
                 removePatchInterface(n, network);
-
                 waitFor(5);
-
                 removeBridge(n, network);
             });
         }
@@ -1410,6 +1418,63 @@ public class KubevirtNetworkHandler {
                     PRIORITY_ARP_GATEWAY_RULE,
                     GW_ENTRY_TABLE,
                     install);
+        }
+    }
+
+    private void setTenantIngressTransitionRule(DeviceId deviceId, Port port, boolean install) {
+
+        String portName = port.annotations().value(PORT_NAME);
+        if (!StringUtils.startsWithIgnoreCase(portName, TENANT_TO_TUNNEL_PREFIX)) {
+            return;
+        }
+
+        TrafficSelector.Builder sBuilder = DefaultTrafficSelector.builder();
+        sBuilder.matchEthType(EthType.EtherType.IPV4.ethType().toShort())
+                .matchInPort(port.number());
+
+        TrafficTreatment.Builder tBuilder = DefaultTrafficTreatment.builder();
+        tBuilder.transition(TENANT_ACL_INGRESS_TABLE);
+
+        flowService.setRule(appId,
+                deviceId,
+                sBuilder.build(),
+                tBuilder.build(),
+                PRIORITY_IP_INGRESS_RULE,
+                TENANT_ICMP_TABLE,
+                install
+        );
+    }
+
+    private class InternalBridgeListener implements DeviceListener {
+
+        @Override
+        public boolean isRelevant(DeviceEvent event) {
+            return event.subject().type() == Device.Type.SWITCH;
+        }
+
+        private boolean isRelevantHelper() {
+            return Objects.equals(localNodeId, leadershipService.getLeader(appId.name()));
+        }
+
+        @Override
+        public void event(DeviceEvent event) {
+            Device device = event.subject();
+            Port port = event.port();
+
+            switch (event.type()) {
+                case PORT_ADDED:
+                    eventExecutor.execute(() -> {
+                        if (!isRelevantHelper()) {
+                            return;
+                        }
+                        setTenantIngressTransitionRule(device.id(), port, true);
+                    });
+                    break;
+                case PORT_REMOVED:
+                default:
+                    // do nothing
+                    break;
+            }
         }
     }
 

@@ -16,6 +16,7 @@
 package org.onosproject.kubevirtnetworking.impl;
 
 import com.google.common.collect.Sets;
+import org.apache.commons.lang.StringUtils;
 import org.onlab.packet.Ethernet;
 import org.onlab.packet.IPv4;
 import org.onlab.packet.Ip4Address;
@@ -33,8 +34,6 @@ import org.onosproject.core.ApplicationId;
 import org.onosproject.core.CoreService;
 import org.onosproject.kubevirtnetworking.api.KubevirtFlowRuleService;
 import org.onosproject.kubevirtnetworking.api.KubevirtNetwork;
-import org.onosproject.kubevirtnetworking.api.KubevirtNetworkEvent;
-import org.onosproject.kubevirtnetworking.api.KubevirtNetworkListener;
 import org.onosproject.kubevirtnetworking.api.KubevirtNetworkService;
 import org.onosproject.kubevirtnetworking.api.KubevirtPort;
 import org.onosproject.kubevirtnetworking.api.KubevirtPortEvent;
@@ -51,8 +50,12 @@ import org.onosproject.kubevirtnode.api.KubevirtNodeEvent;
 import org.onosproject.kubevirtnode.api.KubevirtNodeListener;
 import org.onosproject.kubevirtnode.api.KubevirtNodeService;
 import org.onosproject.mastership.MastershipService;
+import org.onosproject.net.Device;
 import org.onosproject.net.DeviceId;
+import org.onosproject.net.Port;
 import org.onosproject.net.PortNumber;
+import org.onosproject.net.device.DeviceEvent;
+import org.onosproject.net.device.DeviceListener;
 import org.onosproject.net.device.DeviceService;
 import org.onosproject.net.driver.DriverService;
 import org.onosproject.net.flow.DefaultTrafficSelector;
@@ -97,6 +100,7 @@ import static org.onosproject.kubevirtnetworking.api.Constants.TENANT_ACL_EGRESS
 import static org.onosproject.kubevirtnetworking.api.Constants.TENANT_ACL_INGRESS_TABLE;
 import static org.onosproject.kubevirtnetworking.api.Constants.TENANT_ACL_RECIRC_TABLE;
 import static org.onosproject.kubevirtnetworking.api.Constants.TENANT_FORWARDING_TABLE;
+import static org.onosproject.kubevirtnetworking.api.Constants.TENANT_TO_TUNNEL_PREFIX;
 import static org.onosproject.kubevirtnetworking.api.KubevirtNetwork.Type.FLAT;
 import static org.onosproject.kubevirtnetworking.api.KubevirtNetwork.Type.VLAN;
 import static org.onosproject.kubevirtnetworking.impl.OsgiPropertyConstants.USE_SECURITY_GROUP;
@@ -108,6 +112,7 @@ import static org.onosproject.kubevirtnetworking.util.RulePopulatorUtil.computeC
 import static org.onosproject.kubevirtnetworking.util.RulePopulatorUtil.computeCtStateFlag;
 import static org.onosproject.kubevirtnetworking.util.RulePopulatorUtil.niciraConnTrackTreatmentBuilder;
 import static org.onosproject.kubevirtnode.api.KubevirtNode.Type.WORKER;
+import static org.onosproject.net.AnnotationKeys.PORT_NAME;
 import static org.slf4j.LoggerFactory.getLogger;
 
 /**
@@ -202,8 +207,8 @@ public class KubevirtSecurityGroupHandler {
             new InternalSecurityGroupListener();
     private final KubevirtNodeListener nodeListener =
             new InternalNodeListener();
-    private final KubevirtNetworkListener networkListener =
-            new InternalNetworkListener();
+
+    private final DeviceListener bridgeListener = new InternalBridgeListener();
 
     private final ExecutorService eventExecutor = newSingleThreadExecutor(
             groupedThreads(this.getClass().getSimpleName(), "event-handler"));
@@ -217,8 +222,8 @@ public class KubevirtSecurityGroupHandler {
         localNodeId = clusterService.getLocalNode().id();
         securityGroupService.addListener(securityGroupListener);
         portService.addListener(portListener);
-        networkService.addListener(networkListener);
         configService.registerProperties(getClass());
+        deviceService.addListener(bridgeListener);
         nodeService.addListener(nodeListener);
 
         log.info("Started");
@@ -228,9 +233,9 @@ public class KubevirtSecurityGroupHandler {
     protected void deactivate() {
         securityGroupService.removeListener(securityGroupListener);
         portService.removeListener(portListener);
+        deviceService.removeListener(bridgeListener);
         configService.unregisterProperties(getClass(), false);
         nodeService.removeListener(nodeListener);
-        networkService.removeListener(networkListener);
         eventExecutor.shutdown();
 
         log.info("Stopped");
@@ -295,23 +300,8 @@ public class KubevirtSecurityGroupHandler {
         initializeAclTable(deviceId, ACL_RECIRC_TABLE, PortNumber.NORMAL, install);
     }
 
-    private void initializeTenantAclTable(KubevirtNetwork network,
-                                          DeviceId deviceId, boolean install) {
-        // FIXME: in bridge initialization phase, some patch ports may not be
-        // available until they are created, we wait for a while ensure all
-        // patch ports are created via network bootstrap
-        while (true) {
-            if (network.tenantToTunnelPort(deviceId) != null) {
-                break;
-            } else {
-                log.info("Wait for tenant patch ports creation for device {} " +
-                        "and network {}", deviceId, network.networkId());
-                waitFor(5);
-            }
-        }
-
-        PortNumber patchPort = network.tenantToTunnelPort(deviceId);
-        initializeAclTable(deviceId, TENANT_ACL_RECIRC_TABLE, patchPort, install);
+    private void initializeTenantAclTable(DeviceId deviceId, PortNumber portNumber, boolean install) {
+        initializeAclTable(deviceId, TENANT_ACL_RECIRC_TABLE, portNumber, install);
     }
 
     private void initializeAclTable(DeviceId deviceId, int recircTable,
@@ -379,29 +369,12 @@ public class KubevirtSecurityGroupHandler {
         initializeProviderAclTable(node.intgBridge(), install);
     }
 
-    private void initializeTenantPipeline(KubevirtNetwork network,
-                                          KubevirtNode node, boolean install) {
-        DeviceId deviceId = network.tenantDeviceId(node.hostname());
-        if (deviceId == null) {
-            return;
-        }
-
-        // we check whether the given device is available from the store
-        // if not we will wait until the device is eventually created
-        // FIXME: it would be better to listen to device event to perform
-        // pipeline initialization rather on network events.
-        while (true) {
-            if (deviceService.getDevice(deviceId) != null) {
-                break;
-            } else {
-                waitFor(5);
-            }
-        }
-
+    private void initializeTenantPipeline(DeviceId deviceId,
+                                          PortNumber portNumber, boolean install) {
         initializeTenantIngressTable(deviceId, install);
         initializeTenantEgressTable(deviceId, install);
         initializeTenantConnTrackTable(deviceId, install);
-        initializeTenantAclTable(network, deviceId, install);
+        initializeTenantAclTable(deviceId, portNumber, install);
     }
 
     private void updateSecurityGroupRule(KubevirtPort port,
@@ -834,8 +807,13 @@ public class KubevirtSecurityGroupHandler {
             nodeService.completeNodes(WORKER).forEach(node -> {
                 initializeProviderPipeline(node, true);
 
-                for (KubevirtNetwork network : networkService.tenantNetworks()) {
-                    initializeTenantPipeline(network, node, true);
+                for (Device device : deviceService.getDevices()) {
+                    for (Port port : deviceService.getPorts(device.id())) {
+                        String portName = port.annotations().value(PORT_NAME);
+                        if (StringUtils.startsWithIgnoreCase(portName, TENANT_TO_TUNNEL_PREFIX)) {
+                            initializeTenantPipeline(device.id(), port.number(), true);
+                        }
+                    }
                 }
             });
 
@@ -845,8 +823,13 @@ public class KubevirtSecurityGroupHandler {
             nodeService.completeNodes(WORKER).forEach(node -> {
                 initializeProviderPipeline(node, false);
 
-                for (KubevirtNetwork network : networkService.tenantNetworks()) {
-                    initializeTenantPipeline(network, node, false);
+                for (Device device : deviceService.getDevices()) {
+                    for (Port port : deviceService.getPorts(device.id())) {
+                        String portName = port.annotations().value(PORT_NAME);
+                        if (StringUtils.startsWithIgnoreCase(portName, TENANT_TO_TUNNEL_PREFIX)) {
+                            initializeTenantPipeline(device.id(), port.number(), false);
+                        }
+                    }
                 }
             });
 
@@ -1011,42 +994,43 @@ public class KubevirtSecurityGroupHandler {
         }
     }
 
-    private class InternalNetworkListener implements KubevirtNetworkListener {
+    private class InternalBridgeListener implements DeviceListener {
+
+        @Override
+        public boolean isRelevant(DeviceEvent event) {
+            return event.subject().type() == Device.Type.SWITCH;
+        }
 
         private boolean isRelevantHelper() {
             return Objects.equals(localNodeId, leadershipService.getLeader(appId.name()));
         }
 
         @Override
-        public void event(KubevirtNetworkEvent event) {
+        public void event(DeviceEvent event) {
+            Device device = event.subject();
+            Port port = event.port();
+
             switch (event.type()) {
-                case KUBEVIRT_NETWORK_CREATED:
-                    eventExecutor.execute(() -> processNetworkCreation(event.subject()));
+                case PORT_ADDED:
+                    eventExecutor.execute(() -> {
+                        if (!isRelevantHelper()) {
+                            return;
+                        }
+                        initializeTenantTable(device, port);
+                    });
                     break;
-                case KUBEVIRT_NETWORK_REMOVED:
-                case KUBEVIRT_NETWORK_UPDATED:
+                case PORT_REMOVED:
+                    break;
                 default:
-                    // do thing
+                    // do nothing
                     break;
             }
         }
 
-        private void processNetworkCreation(KubevirtNetwork network) {
-            if (!isRelevantHelper()) {
-                return;
-            }
-
-            Set<KubevirtNode> nodes = nodeService.completeNodes(WORKER);
-
-            if (nodes.size() > 0) {
-                // now we wait 5s for all tenant bridges are created,
-                // FIXME: we need to fina a better way to wait all tenant bridges
-                // are created before installing default security group rules
-                waitFor(5);
-
-                for (KubevirtNode node : nodes) {
-                    initializeTenantPipeline(network, node, true);
-                }
+        private void initializeTenantTable(Device device, Port port) {
+            String portName = port.annotations().value(PORT_NAME);
+            if (StringUtils.startsWithIgnoreCase(portName, TENANT_TO_TUNNEL_PREFIX)) {
+                initializeTenantPipeline(device.id(), port.number(), true);
             }
         }
     }
@@ -1136,8 +1120,13 @@ public class KubevirtSecurityGroupHandler {
         if (getUseSecurityGroupFlag()) {
             initializeProviderPipeline(node, true);
 
-            for (KubevirtNetwork network : networkService.tenantNetworks()) {
-                initializeTenantPipeline(network, node, true);
+            for (Device device : deviceService.getDevices()) {
+                for (Port port : deviceService.getPorts(device.id())) {
+                    String portName = port.annotations().value(PORT_NAME);
+                    if (StringUtils.startsWithIgnoreCase(portName, TENANT_TO_TUNNEL_PREFIX)) {
+                        initializeTenantPipeline(device.id(), port.number(), true);
+                    }
+                }
             }
 
             securityGroupService.securityGroups().forEach(securityGroup ->
@@ -1146,8 +1135,13 @@ public class KubevirtSecurityGroupHandler {
         } else {
             initializeProviderPipeline(node, false);
 
-            for (KubevirtNetwork network : networkService.tenantNetworks()) {
-                initializeTenantPipeline(network, node, false);
+            for (Device device : deviceService.getDevices()) {
+                for (Port port : deviceService.getPorts(device.id())) {
+                    String portName = port.annotations().value(PORT_NAME);
+                    if (StringUtils.startsWithIgnoreCase(portName, TENANT_TO_TUNNEL_PREFIX)) {
+                        initializeTenantPipeline(device.id(), port.number(), false);
+                    }
+                }
             }
 
             securityGroupService.securityGroups().forEach(securityGroup ->

@@ -148,7 +148,7 @@ public class KubevirtRoutingArpHandler {
      */
     private void retrievePeerRouterMac(KubevirtRouter router, IpAddress peerRouterIp) {
 
-        log.info("Sending ARP request to the peer router {} to retrieve the MAC address.",
+        log.debug("Sending ARP request to the peer router {} to retrieve the MAC address.",
                 peerRouterIp.getIp4Address().toString());
         String routerSnatIp = router.external().keySet().stream().findAny().orElse(null);
 

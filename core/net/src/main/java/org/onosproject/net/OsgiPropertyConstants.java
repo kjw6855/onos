@@ -98,6 +98,9 @@ public final class OsgiPropertyConstants {
     public static final String ICR_COPY_TTL = "useCopyTtl";
     public static final boolean ICR_COPY_TTL_DEFAULT = false;
 
+    public static final String ICR_INTENT_TAG = "useIntentTag";
+    public static final boolean ICR_INTENT_TAG_DEFAULT = true;
+
     public static final String ICU_ENABLED = "enabled";
     public static final boolean ICU_ENABLED_DEFAULT = true;
 

@@ -20,11 +20,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.SetMultimap;
 import org.onosproject.net.resource.impl.LabelAllocator;
-import org.osgi.service.component.annotations.Activate;
-import org.osgi.service.component.annotations.Component;
-import org.osgi.service.component.annotations.Deactivate;
-import org.osgi.service.component.annotations.Reference;
-import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.ComponentContext;
+import org.osgi.service.component.annotations.*;
 import org.onlab.util.Identifier;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.core.CoreService;
@@ -48,6 +45,7 @@ import org.onosproject.net.intent.LinkCollectionIntent;
 import org.onosproject.net.intent.PathIntent;
 import org.onosproject.net.intent.constraint.EncapsulationConstraint;
 import org.onosproject.net.resource.ResourceService;
+import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -55,6 +53,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.slf4j.LoggerFactory.getLogger;
 import static org.onosproject.net.domain.DomainId.LOCAL;
 import static org.onosproject.net.flow.instructions.Instruction.Type.NOACTION;
 
@@ -63,7 +63,7 @@ import static org.onosproject.net.flow.instructions.Instruction.Type.NOACTION;
  */
 @Component(immediate = true)
 public class LinkCollectionIntentCompiler
-        extends LinkCollectionCompiler<FlowRule>
+        extends org.onosproject.net.intent.impl.compiler.LinkCollectionCompiler<FlowRule>
         implements IntentCompiler<LinkCollectionIntent> {
 
     private static final String UNKNOWN_INSTRUCTION = "Unknown instruction type";
@@ -71,7 +71,7 @@ public class LinkCollectionIntentCompiler
 
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
-    protected IntentConfigurableRegistrator registrator;
+    protected org.onosproject.net.intent.impl.compiler.IntentConfigurableRegistrator registrator;
 
     @Reference(cardinality = ReferenceCardinality.MANDATORY)
     protected CoreService coreService;
@@ -112,6 +112,7 @@ public class LinkCollectionIntentCompiler
         if (encapConstraint.isPresent()) {
             labels = labelAllocator.assignLabelToPorts(intent.links(), intent.key(),
                                                        encapConstraint.get().encapType(),
+                                                       useIntentTag ? Optional.ofNullable(intent.id()) :
                                                        encapConstraint.get().suggestedIdentifier());
         }
 

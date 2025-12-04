@@ -105,6 +105,8 @@ public abstract class LinkCollectionCompiler<T> {
      */
     static boolean copyTtl;
 
+    static boolean useIntentTag;
+
     /**
      * The allowed tag criterions.
      */

@@ -35,16 +35,7 @@ import org.slf4j.Logger;
 import java.util.Map;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static org.onosproject.net.OsgiPropertyConstants.ICR_COPY_TTL;
-import static org.onosproject.net.OsgiPropertyConstants.ICR_COPY_TTL_DEFAULT;
-import static org.onosproject.net.OsgiPropertyConstants.ICR_FLOW_OPTIMIZATION;
-import static org.onosproject.net.OsgiPropertyConstants.ICR_LABEL_SELECTION;
-import static org.onosproject.net.OsgiPropertyConstants.ICR_OPT_LABEL_SELECTION;
-import static org.onosproject.net.OsgiPropertyConstants.ICR_USE_FLOW_OBJECTIVES;
-import static org.onosproject.net.OsgiPropertyConstants.ICR_USE_FLOW_OBJECTIVES_DEFAULT;
-import static org.onosproject.net.OsgiPropertyConstants.ICR_FLOW_OPTIMIZATION_DEFAULT;
-import static org.onosproject.net.OsgiPropertyConstants.ICR_LABEL_SELECTION_DEFAULT;
-import static org.onosproject.net.OsgiPropertyConstants.ICR_OPT_LABEL_SELECTION_DEFAULT;
+import static org.onosproject.net.OsgiPropertyConstants.*;
 import static org.slf4j.LoggerFactory.getLogger;
 
 /**
@@ -58,7 +49,8 @@ import static org.slf4j.LoggerFactory.getLogger;
         ICR_LABEL_SELECTION + "=" + ICR_LABEL_SELECTION_DEFAULT,
         ICR_OPT_LABEL_SELECTION + "=" + ICR_OPT_LABEL_SELECTION_DEFAULT,
         ICR_FLOW_OPTIMIZATION + ":Boolean=" + ICR_FLOW_OPTIMIZATION_DEFAULT,
-        ICR_COPY_TTL + ":Boolean=" + ICR_COPY_TTL_DEFAULT
+        ICR_COPY_TTL + ":Boolean=" + ICR_COPY_TTL_DEFAULT,
+        ICR_INTENT_TAG + ":Boolean=" + ICR_INTENT_TAG_DEFAULT
     }
 )
 public class IntentConfigurableRegistrator {
@@ -86,6 +78,9 @@ public class IntentConfigurableRegistrator {
     /** Indicates whether or not to use copy ttl in the link collection compiler. */
     private boolean useCopyTtl = ICR_COPY_TTL_DEFAULT;
 
+    /** Indicates whether to assign an intent tag **/
+    private boolean useIntentTag = ICR_INTENT_TAG_DEFAULT;
+
     private final Map<Class<Intent>, IntentCompiler<Intent>> flowRuleBased = Maps.newConcurrentMap();
 
     // FIXME: temporary code for switching old compiler to new compiler
@@ -111,6 +106,7 @@ public class IntentConfigurableRegistrator {
             log.info("Settings: useFlowOptimization={}", optimizeInstructions);
             log.info("Settings: useCopyTtl={}", useCopyTtl);
             log.info("Settings: optLabelSelection={}", optLabelSelection);
+            log.info("Settings: useIntentTag={}", useIntentTag);
 
             return;
         }
@@ -186,6 +182,20 @@ public class IntentConfigurableRegistrator {
             changeCopyTtl();
             log.info("Settings: useCopyTtl={}", useCopyTtl);
         }
+
+        boolean newIntentTag;
+        try {
+            String s = Tools.get(context.getProperties(), ICR_INTENT_TAG);
+            newIntentTag = isNullOrEmpty(s) ? useIntentTag : Boolean.parseBoolean(s.trim());
+        } catch (ClassCastException e) {
+            newIntentTag = useIntentTag;
+        }
+
+        if (useIntentTag != newIntentTag) {
+            useIntentTag = newIntentTag;
+            changeIntentTag();
+            log.info("Settings: useIntentTag={}", useIntentTag);
+        }
     }
 
     /**
@@ -256,4 +266,7 @@ public class IntentConfigurableRegistrator {
         LinkCollectionCompiler.copyTtl = useCopyTtl;
     }
 
+    private void changeIntentTag() {
+        LinkCollectionCompiler.useIntentTag = useIntentTag;
+    }
 }

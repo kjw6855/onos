@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -95,6 +96,7 @@ public final class LabelAllocator {
     private ResourceService resourceService;
     private LabelSelection labelSelection;
     private OptimizationBehavior optLabelSelection;
+    private boolean useIntentTag;
 
     /**
      * Creates a new label allocator. Random is the default selection behavior.
@@ -106,7 +108,9 @@ public final class LabelAllocator {
         this.resourceService = checkNotNull(rs);
         this.labelSelection = this.getLabelSelection(SelectionBehavior.RANDOM);
         this.optLabelSelection = OptimizationBehavior.NONE;
+        this.useIntentTag = true;
     }
+
 
     /**
      * Checks if a given string is a valid Selection Behavior.
@@ -137,6 +141,15 @@ public final class LabelAllocator {
         }
         return false;
     }
+
+    public void setUseIntentTag(boolean useIntentTag) {
+        this.useIntentTag = useIntentTag;
+    }
+
+    public boolean getUseIntentTag() {
+        return this.useIntentTag;
+    }
+
 
     /**
      * Changes the selection behavior.
@@ -417,12 +430,20 @@ public final class LabelAllocator {
                                                           ResourceConsumer resourceConsumer,
                                                           EncapsulationType type,
                                                           Optional<Identifier<?>> suggestedIdentifier) {
-        // To preserve order of the links. This is important for MIN_SWAP behavior
-        Set<LinkKey> linkRequest = links.stream()
-                .map(LinkKey::linkKey)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        Map<LinkKey, Identifier<?>> availableIds = findAvailableIDs(linkRequest, type, suggestedIdentifier);
+        Map<LinkKey, Identifier<?>> availableIds;
+        if (useIntentTag && suggestedIdentifier.isPresent()) {
+            availableIds = links.stream()
+                    .map(LinkKey::linkKey)
+                    .collect(Collectors.toMap(Function.identity(), v -> suggestedIdentifier.get()));
+        } else {
+            // To preserve order of the links. This is important for MIN_SWAP behavior
+            Set<LinkKey> linkRequest = links.stream()
+                    .map(LinkKey::linkKey)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            availableIds = findAvailableIDs(linkRequest, type, suggestedIdentifier);
+        }
+
         if (availableIds.isEmpty()) {
             return Collections.emptyMap();
         }

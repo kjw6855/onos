@@ -268,5 +268,6 @@ public class IntentConfigurableRegistrator {
 
     private void changeIntentTag() {
         LinkCollectionCompiler.useIntentTag = useIntentTag;
+        LinkCollectionCompiler.labelAllocator.setUseIntentTag(useIntentTag);
     }
 }
